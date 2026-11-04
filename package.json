@@ -1,9 +1,9 @@
 {
-  "name": "petshop-temp",
-  "productName": "petshop-temp",
+  "name": "pet-shop-will",
+  "productName": "Pet Shop DAD",
   "version": "1.0.0",
   "private": true,
-  "description": "My Electron application description",
+  "description": "Sistema desktop de pet shop (projeto final de DAD)",
   "keywords": [],
   "license": "MIT",
   "author": {
@@ -13,6 +13,7 @@
   "main": ".vite/build/main.cjs",
   "scripts": {
     "start": "electron-forge start",
+    "seed": "tsx database/seed.ts",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "release": "electron-forge release",
@@ -30,14 +31,20 @@
     "@electron-forge/plugin-fuses": "^8.0.1",
     "@electron-forge/plugin-vite": "^8.0.1",
     "@electron/fuses": "^2.1.3",
+    "@types/bcryptjs": "^2.4.6",
     "@types/electron-squirrel-startup": "^1.0.2",
     "electron": "45.2.2",
     "oxfmt": "^0.41.0",
     "oxlint": "^1.91.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vite": "^8.3.5"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "bcryptjs": "^3.0.3",
+    "bootstrap": "^5.3.8",
+    "dotenv": "^18.0.9",
+    "electron-squirrel-startup": "^1.0.1",
+    "mysql2": "^3.24.6"
   }
 }
