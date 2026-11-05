@@ -32,6 +32,10 @@ import { ErroDeNegocio } from '../security/ErroDeNegocio';
 // aponta para este" (chave estrangeira com ON DELETE RESTRICT).
 const ERROS_DE_CHAVE_ESTRANGEIRA = [1451, 1217];
 
+// Código de erro do MySQL para "valor repetido numa coluna UNIQUE"
+// (ex.: e-mail, CPF ou CNPJ que já existe).
+const ERRO_DE_DUPLICIDADE = 1062;
+
 export abstract class BaseRepository<T extends { id: number }> {
   constructor(
     protected db: Database,
@@ -94,9 +98,32 @@ export abstract class BaseRepository<T extends { id: number }> {
   /** Atualiza a linha que tem esse id. */
   abstract atualizar(id: number, dados: Omit<T, 'id'>): Promise<void>;
 
+  /**
+   * Confere se o erro veio de um valor repetido numa coluna UNIQUE.
+   * Use no inserir/atualizar da filha para trocar o erro técnico por
+   * uma mensagem que o usuário entenda:
+   *
+   *   try {
+   *     ... INSERT ...
+   *   } catch (erro) {
+   *     if (this.ehErroDeDuplicidade(erro)) {
+   *       throw new ErroDeNegocio('Já existe um fornecedor com esse CNPJ.');
+   *     }
+   *     throw erro;
+   *   }
+   */
+  protected ehErroDeDuplicidade(erro: unknown): boolean {
+    return BaseRepository.codigoDoErro(erro) === ERRO_DE_DUPLICIDADE;
+  }
+
   /** Confere se o erro veio do MySQL por causa de chave estrangeira. */
   private static ehErroDeChaveEstrangeira(erro: unknown): boolean {
-    const errno = (erro as { errno?: number } | null)?.errno;
+    const errno = BaseRepository.codigoDoErro(erro);
     return errno !== undefined && ERROS_DE_CHAVE_ESTRANGEIRA.includes(errno);
+  }
+
+  /** Lê o número do erro do MySQL (errno), se existir. */
+  private static codigoDoErro(erro: unknown): number | undefined {
+    return (erro as { errno?: number } | null)?.errno;
   }
 }
