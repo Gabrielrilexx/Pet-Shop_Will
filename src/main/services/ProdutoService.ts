@@ -60,7 +60,16 @@ export class ProdutoService {
    * o perfil de quem está logado.
    */
   async listar(perfil: Perfil): Promise<Produto[] | ProdutoSemCusto[]> {
-    const lista = await this.produtos.listar();
+    return ProdutoService.paraOPerfil(await this.produtos.listar(), perfil);
+  }
+
+  /**
+   * A REGRA do corte, escrita UMA vez só (a tela inicial também usa):
+   * ADMIN recebe a lista inteira; qualquer outro perfil recebe sem
+   * custo e margem. Na dúvida, corta ("falhar fechado").
+   * "static" = dá para usar sem criar um ProdutoService.
+   */
+  static paraOPerfil(lista: Produto[], perfil: Perfil): Produto[] | ProdutoSemCusto[] {
     if (perfil === 'ADMIN') {
       return lista;
     }
