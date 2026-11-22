@@ -147,6 +147,23 @@ export class ProdutoRepository extends BaseRepository<Produto> {
   }
 
   // -------------------------------------------------------------------
+  // Tela inicial (contrato do Integrante 1)
+  // -------------------------------------------------------------------
+
+  /**
+   * Produtos com estoque ABAIXO do mínimo, em ordem de nome.
+   * "Abaixo" = MENOR que o mínimo (regra escrita no exemplo.sql): com
+   * estoque 5 e mínimo 5, ainda não é alerta.
+   * Não tem "?" porque nenhum valor vem de fora: a comparação é entre
+   * duas colunas da própria tabela.
+   */
+  async listarEstoqueBaixo(): Promise<Produto[]> {
+    return this.db.consultar<Produto>(
+      'SELECT * FROM produto WHERE quantidade_estoque < estoque_minimo ORDER BY nome',
+    );
+  }
+
+  // -------------------------------------------------------------------
   // Ajudantes internos (private: só esta classe usa)
   // -------------------------------------------------------------------
 
