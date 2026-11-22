@@ -23,7 +23,7 @@ import { Database } from '../database/Database';
 import type { PoolConnection, ResultadoExecucao } from '../database/Database';
 import { BaseRepository } from './BaseRepository';
 import { ItemPedidoRepository } from './ItemPedidoRepository';
-import type { ItemPedido, Pedido } from '../../shared/tipos';
+import type { ItemPedido, Pedido, StatusPedido } from '../../shared/tipos';
 
 /**
  * Um item do jeito que chega para ser gravado junto com o pedido:
@@ -128,6 +128,41 @@ export class PedidoRepository extends BaseRepository<Pedido> {
                 await this.itens.inserirNaTransacao(con, { ...item, pedido_id: id });
             }
         });
+    }
+
+    // -------------------------------------------------------------------
+    // Mudança de status (usado pelo PedidoService, dentro de transação)
+    // -------------------------------------------------------------------
+
+    /**
+     * Busca o pedido DENTRO da transação e o TRAVA até ela terminar
+     * (FOR UPDATE). Enquanto um atendente confirma o pedido 12, outro
+     * que tente cancelar o mesmo pedido 12 espera na fila, como a porta
+     * de um provador ocupado: só entra quando o primeiro sair.
+     * Devolve null se o pedido não existir.
+     */
+    async buscarParaAlterar(con: PoolConnection, id: number): Promise<Pedido | null> {
+        const [linhas] = await con.execute('SELECT * FROM pedido WHERE id = ? FOR UPDATE', [id]);
+        return (linhas as Pedido[])[0] ?? null;
+    }
+
+    /**
+     * Muda o status de "de" para "para", SÓ SE o pedido ainda estiver
+     * em "de" (a mesma "catraca" do registrarEntregue das entregas).
+     * Devolve true se mudou. As REGRAS (quem pode virar o quê) ficam no
+     * PedidoService; aqui só garantimos que ninguém pulou na frente.
+     */
+    async mudarStatus(
+        con: PoolConnection,
+        id: number,
+        de: StatusPedido,
+        para: StatusPedido,
+    ): Promise<boolean> {
+        const [resultado] = await con.execute(
+            'UPDATE pedido SET status = ? WHERE id = ? AND status = ?',
+            [para, id, de],
+        );
+        return (resultado as ResultadoExecucao).affectedRows === 1;
     }
 
     // -------------------------------------------------------------------

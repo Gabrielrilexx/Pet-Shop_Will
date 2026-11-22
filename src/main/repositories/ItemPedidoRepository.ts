@@ -64,12 +64,20 @@ export class ItemPedidoRepository extends BaseRepository<ItemPedido> {
     // Métodos próprios da minha parte
     // -------------------------------------------------------------------
 
-    /** Todos os itens de um pedido, na ordem em que foram adicionados. */
-    async listarPorPedido(pedidoId: number): Promise<ItemPedido[]> {
-        return this.db.consultar<ItemPedido>(
-            'SELECT * FROM item_pedido WHERE pedido_id = ? ORDER BY id',
-            [pedidoId],
-        );
+    /**
+     * Todos os itens de um pedido, na ordem em que foram adicionados.
+     * A "con" é opcional: quem está DENTRO de uma transação (o
+     * PedidoService, ao confirmar ou cancelar) passa a sua, para ler os
+     * itens no mesmo "caixa" onde vai mexer no estoque. Sem "con", lê
+     * pelo pool, como sempre.
+     */
+    async listarPorPedido(pedidoId: number, con?: PoolConnection): Promise<ItemPedido[]> {
+        const sql = 'SELECT * FROM item_pedido WHERE pedido_id = ? ORDER BY id';
+        if (con) {
+            const [linhas] = await con.execute(sql, [pedidoId]);
+            return linhas as ItemPedido[];
+        }
+        return this.db.consultar<ItemPedido>(sql, [pedidoId]);
     }
 
     /**
