@@ -21,7 +21,8 @@ Projeto final de DAD (Desenvolvimento de Aplicações Desktop)
 1. `npm install`
 2. Copie o `.env.example` para `.env` e preencha os dados do MySQL.
 3. `npm run db:testar` confere a conexão, as 10 tabelas e o relógio do servidor.
-4. `npm start` abre o sistema.
+4. **Só na primeira vez (banco sem nenhum usuário):** `npm run seed` cria o primeiro ADMIN. Ele pergunta nome, e-mail e senha no terminal (a senha não aparece enquanto você digita).
+5. `npm start` abre o sistema na tela de login.
 
 ---
 
@@ -172,9 +173,9 @@ import { CatalogoPage } from './pages/CatalogoPage';
 | `auth:login` | PUBLICO |
 | `auth:sair`, `auth:atual` | ADMIN, ATENDENTE |
 
-### Enquanto o login (Passo 7) não fica pronto
+### Testar com os dois perfis
 
-Todo canal que não é `PUBLICO` responde **"Faça login para continuar."**. Isso é o sistema funcionando certo. Você já pode escrever e testar a página: os dados aparecem assim que o login existir.
+O banco é compartilhado, então o ADMIN criado pelo `npm run seed` serve para todo o grupo (peça o e-mail e a senha em particular). Teste as suas telas **como ADMIN e como ATENDENTE**: o item do menu some para quem não está no `perfis` da rota, e o IpcRouter recusa o canal com "Você não tem permissão para fazer isso.".
 
 ---
 
@@ -191,3 +192,9 @@ Todo canal que não é `PUBLICO` responde **"Faça login para continuar."**. Iss
 | Origem do pedido conferida | `src/main/ipc/IpcRouter.ts` | Só a página do próprio sistema pode chamar o Main |
 | Erro técnico nunca vai para a tela | `src/main/ipc/IpcRouter.ts` | A tela recebe só "Erro inesperado." e o detalhe fica no terminal |
 | Janela não navega para fora | `src/main.ts` | Links externos abrem no navegador do computador |
+| Senha com bcrypt (custo 10) | `src/main/security/PasswordHasher.ts` | O banco guarda só o hash: nem quem tem acesso ao banco vê as senhas |
+| Mensagem genérica no login | `src/main/services/AuthService.ts` | "E-mail ou senha inválidos." não revela quais e-mails existem |
+| Bloqueio de 5 minutos após 5 erros | `src/main/services/AuthService.ts` | Impede testar milhares de senhas |
+| Mesmo tempo de resposta no login | `src/main/services/AuthService.ts` | O bcrypt roda mesmo quando o e-mail não existe |
+| Sessão guardada no Main | `src/main/security/Sessao.ts` | A tela não consegue "se promover" a ADMIN pelo DevTools |
+| Senha nunca vai para a tela | `src/main/services/UsuarioService.ts` | A tela recebe `UsuarioSemSenha` |
