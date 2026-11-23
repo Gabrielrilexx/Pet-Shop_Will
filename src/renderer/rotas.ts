@@ -17,6 +17,7 @@ import { UsuariosPage } from './pages/UsuariosPage';
 import { CatalogoPage } from './pages/CatalogoPage';
 import { FornecedoresPage } from './pages/FornecedoresPage';
 import { ProdutosPage } from './pages/ProdutosPage';
+import { InicioPage } from './pages/InicioPage';
 // --- Integrante 4 ----------------------------------------------------
 
 /** O que toda página precisa ter (contrato da Arquitetura). */
@@ -40,5 +41,6 @@ export const ROTAS: Rota[] = [
   { id: 'catalogo', titulo: 'Catálogo', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new CatalogoPage() },
   { id: 'fornecedores', titulo: 'Fornecedores', perfis: ['ADMIN'], criar: () => new FornecedoresPage() },
   { id: 'produtos', titulo: 'Produtos', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new ProdutosPage() },
+  { id: 'inicio', titulo: 'Início', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new InicioPage() },
   // --- Integrante 4 --------------------------------------------------
 ];
