@@ -27,6 +27,21 @@ export const CANAIS_PERMITIDOS: readonly string[] = [
   // --- Integrante 2: clientes e entregadores --------------------------
 
   // --- Integrante 3: espécies, categorias, fornecedores, produtos e início
+  'especies:listar',
+  'especies:salvar',
+  'especies:excluir',
+  'categorias:listar',
+  'categorias:salvar',
+  'categorias:excluir',
+  'fornecedores:listar',
+  'fornecedores:salvar',
+  'fornecedores:excluir',
+  'fornecedores:buscarCnpj',
+  'produtos:listar',
+  'produtos:salvar',
+  'produtos:excluir',
+  'produtos:cotacao',
+  'inicio:resumo',
 
   // --- Integrante 4: pedidos, itens e entregas -------------------------
 ];
