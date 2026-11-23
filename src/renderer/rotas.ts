@@ -13,6 +13,8 @@ import type { Perfil } from '../shared/tipos';
 // --- Integrante 1 ----------------------------------------------------
 import { UsuariosPage } from './pages/UsuariosPage';
 // --- Integrante 2 ----------------------------------------------------
+import { ClientesPage } from './pages/ClientesPage';
+import { EntregadoresPage } from './pages/EntregadoresPage';
 // --- Integrante 3 ----------------------------------------------------
 import { CatalogoPage } from './pages/CatalogoPage';
 import { FornecedoresPage } from './pages/FornecedoresPage';
@@ -37,6 +39,8 @@ export const ROTAS: Rota[] = [
   // --- Integrante 1 --------------------------------------------------
   { id: 'usuarios', titulo: 'Usuários', perfis: ['ADMIN'], criar: () => new UsuariosPage() },
   // --- Integrante 2 --------------------------------------------------
+  { id: 'clientes', titulo: 'Clientes', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new ClientesPage() },
+  { id: 'entregadores', titulo: 'Entregadores', perfis: ['ADMIN'], criar: () => new EntregadoresPage() },
   // --- Integrante 3 --------------------------------------------------
   { id: 'catalogo', titulo: 'Catálogo', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new CatalogoPage() },
   { id: 'fornecedores', titulo: 'Fornecedores', perfis: ['ADMIN'], criar: () => new FornecedoresPage() },
