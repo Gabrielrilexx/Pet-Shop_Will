@@ -69,4 +69,26 @@ export class UsuarioRepository extends BaseRepository<Usuario> {
       throw new ErroDeNegocio('Registro não encontrado.');
     }
   }
+
+  /** Troca SÓ o hash da senha (redefinir senha). */
+  async atualizarSenha(id: number, senhaHash: string): Promise<void> {
+    const resultado = await this.db.executar(
+      'UPDATE usuario SET senha_hash = ? WHERE id = ?',
+      [senhaHash, id],
+    );
+    if (resultado.affectedRows === 0) {
+      throw new ErroDeNegocio('Registro não encontrado.');
+    }
+  }
+
+  /** Ativa (true) ou desativa (false) o usuário. */
+  async alterarAtivo(id: number, ativo: boolean): Promise<void> {
+    const resultado = await this.db.executar(
+      'UPDATE usuario SET ativo = ? WHERE id = ?',
+      [ativo, id],
+    );
+    if (resultado.affectedRows === 0) {
+      throw new ErroDeNegocio('Registro não encontrado.');
+    }
+  }
 }

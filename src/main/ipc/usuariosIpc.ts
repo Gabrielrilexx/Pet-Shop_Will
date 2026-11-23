@@ -5,9 +5,10 @@
 // liga cada canal (nome do pedido) a um método do Service, dizendo
 // QUEM pode pedir. Quem confere login e perfil é o IpcRouter.
 //
-// Lembrete (ver README "Como criar um módulo"):
-//   - o canal também precisa estar em src/shared/canais.ts;
-//   - esta função é chamada UMA vez no src/main.ts.
+// usuarios:* -> só ADMIN (tabela de permissões da Arquitetura).
+//
+// O "usuario!" é seguro: como nenhum canal aqui é PUBLICO, o IpcRouter
+// já recusou quem não está logado antes de chegar aqui.
 // =====================================================================
 
 import type { UsuarioSemSenha } from '../../shared/tipos';
@@ -17,11 +18,23 @@ import { UsuarioService } from '../services/UsuarioService';
 export function registrarUsuariosIpc(router: IpcRouter): void {
   const service = new UsuarioService();
 
-  // usuarios:listar -> só ADMIN (tabela de permissões da Arquitetura)
   router.registrar<void, UsuarioSemSenha[]>('usuarios:listar', ['ADMIN'], () =>
     service.listar(),
   );
 
-  // Passo 9: usuarios:salvar, usuarios:excluir, usuarios:alterarAtivo e
-  // usuarios:redefinirSenha entram aqui.
+  router.registrar<unknown, number>('usuarios:salvar', ['ADMIN'], (dados, usuario) =>
+    service.salvar(dados, usuario!),
+  );
+
+  router.registrar<unknown, void>('usuarios:alterarAtivo', ['ADMIN'], (dados, usuario) =>
+    service.alterarAtivo(dados, usuario!),
+  );
+
+  router.registrar<unknown, void>('usuarios:redefinirSenha', ['ADMIN'], (dados) =>
+    service.redefinirSenha(dados),
+  );
+
+  router.registrar<unknown, void>('usuarios:excluir', ['ADMIN'], (id, usuario) =>
+    service.excluir(id, usuario!),
+  );
 }

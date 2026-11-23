@@ -136,6 +136,16 @@ botaoSair.addEventListener('click', async () => {
 
 window.addEventListener('hashchange', () => void abrir(paginaAtual()));
 
+// Uma página avisou que os dados de quem está logado mudaram (ex.: o
+// ADMIN editou o próprio nome): pergunta de novo ao Main e atualiza o topo.
+window.addEventListener('sessao-alterada', async () => {
+  const resposta = await window.api.chamar<UsuarioSemSenha>('auth:atual');
+  if (resposta.ok) {
+    usuarioAtual = resposta.dados;
+    usuarioLogado.textContent = `${resposta.dados.nome} (${resposta.dados.perfil})`;
+  }
+});
+
 /** Ao abrir a janela: já tem alguém logado? (ex.: a página recarregou) */
 async function iniciar(): Promise<void> {
   const resposta = await window.api.chamar<UsuarioSemSenha>('auth:atual');

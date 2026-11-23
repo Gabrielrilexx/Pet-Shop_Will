@@ -131,6 +131,8 @@ Regras da tela (a Content-Security-Policy **bloqueia** o que estiver fora delas)
 - **Nada de `onclick="..."`** nem `<script>` dentro do HTML. Ligue os botões com `addEventListener`.
 - Todo texto que vem de dados entra no HTML com `escapar(...)`, ou use `textContent`.
 - Erro do Main: mostre `resposta.erro` com `mostrarAlerta(...)`.
+- Excluir sempre com confirmação: `if (await confirmar('Excluir cliente', \`Excluir "${nome}"?\`, 'Excluir')) { ... }` (janela modal do Bootstrap, no `ui.ts`).
+- Lista com botões por linha: em vez de um `addEventListener` por botão, um só na tabela, lendo `data-acao` e `data-id` (veja a `UsuariosPage`).
 - A validação da tela é só conforto. Quem decide é o Main.
 - Use ids com o nome do módulo (`catalogo-lista`), para não bater com os de outra tela.
 
