@@ -43,5 +43,12 @@ export const CANAIS_PERMITIDOS: readonly string[] = [
   'produtos:cotacao',
   'inicio:resumo',
 
-  // --- Integrante 4: pedidos, itens e entregas -------------------------
-];
+  // --- Integrante 4: pedidos, itens e entregas ------------------------// 
+  'pedidos:listar',
+  'pedidos:salvar',
+  'pedidos:confirmar',
+  'pedidos:cancelar',
+  'pedidos:excluir',
+]; 
+
+

@@ -19,7 +19,7 @@ import { FornecedoresPage } from './pages/FornecedoresPage';
 import { ProdutosPage } from './pages/ProdutosPage';
 import { InicioPage } from './pages/InicioPage';
 // --- Integrante 4 ----------------------------------------------------
-
+import { PedidosPage } from './pages/PedidosPage';
 /** O que toda página precisa ter (contrato da Arquitetura). */
 export interface Pagina {
   render(app: HTMLElement): Promise<void>;
@@ -43,4 +43,5 @@ export const ROTAS: Rota[] = [
   { id: 'produtos', titulo: 'Produtos', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new ProdutosPage() },
   { id: 'inicio', titulo: 'Início', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new InicioPage() },
   // --- Integrante 4 --------------------------------------------------
+  { id: 'pedidos', titulo: 'Pedidos', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new PedidosPage() },
 ];

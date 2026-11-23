@@ -23,6 +23,7 @@ import { Database } from '../database/Database';
 import type { PoolConnection, ResultadoExecucao } from '../database/Database';
 import { BaseRepository } from './BaseRepository';
 import { ItemPedidoRepository } from './ItemPedidoRepository';
+import { ErroDeNegocio } from '../security/ErroDeNegocio';
 import type { ItemPedido, Pedido, StatusPedido } from '../../shared/tipos';
 
 /**
@@ -31,6 +32,13 @@ import type { ItemPedido, Pedido, StatusPedido } from '../../shared/tipos';
  * existe quando o item é montado; o inserirComItens preenche).
  */
 export type ItemNovo = Omit<ItemPedido, 'id' | 'pedido_id'>;
+
+/** Um pedido do jeito que a LISTA mostra: com o nome do cliente junto. */
+export type PedidoComCliente = Pedido & { cliente_nome: string };
+
+// Código de erro do MySQL para "não pode apagar: outro registro aponta
+// para este" (aqui: a tabela entrega aponta para o pedido, com RESTRICT).
+const ERRO_EM_USO = 1451;
 
 // data_pedido não aparece: o banco preenche sozinho (DEFAULT
 // CURRENT_TIMESTAMP).
@@ -120,14 +128,65 @@ export class PedidoRepository extends BaseRepository<Pedido> {
         id: number,
         pedido: Omit<Pedido, 'id'>,
         itens: ItemNovo[],
+        con?: PoolConnection,
     ): Promise<void> {
-        await this.db.transacao(async (con) => {
-            await con.execute(SQL_ATUALIZAR, PedidoRepository.parametrosAtualizar(id, pedido));
-            await this.itens.excluirPorPedido(con, id);
+        // A "con" é opcional (mesma ideia do listarPorPedido): quem JÁ
+        // está numa transação (o PedidoService, que travou o pedido para
+        // conferir se ele ainda está ABERTO) passa a sua. Sem "con", esta
+        // função abre a própria transação, como antes.
+        const trocar = async (c: PoolConnection): Promise<void> => {
+            await c.execute(SQL_ATUALIZAR, PedidoRepository.parametrosAtualizar(id, pedido));
+            await this.itens.excluirPorPedido(c, id);
             for (const item of itens) {
-                await this.itens.inserirNaTransacao(con, { ...item, pedido_id: id });
+                await this.itens.inserirNaTransacao(c, { ...item, pedido_id: id });
             }
-        });
+        };
+        if (con) {
+            await trocar(con);
+        } else {
+            await this.db.transacao(trocar);
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // Lista e exclusão (Passo 4)
+    // -------------------------------------------------------------------
+
+    /**
+     * Todos os pedidos, do mais novo para o mais antigo, já com o NOME
+     * do cliente. JOIN = "junte cada pedido com a linha do cliente que
+     * tem o mesmo id", como grampear a ficha do cliente na comanda.
+     */
+    async listarComCliente(): Promise<PedidoComCliente[]> {
+        return this.db.consultar<PedidoComCliente>(
+            'SELECT p.*, c.nome AS cliente_nome ' +
+            'FROM pedido p ' +
+            'JOIN cliente c ON c.id = p.cliente_id ' +
+            'ORDER BY p.data_pedido DESC, p.id DESC',
+        );
+    }
+
+    /**
+     * Exclui o pedido SÓ SE ele estiver ABERTO ou CANCELADO (a condição
+     * fica no próprio DELETE, como a catraca do mudarStatus: ninguém
+     * consegue confirmar o pedido "no meio" da exclusão).
+     * Devolve true se excluiu. Os itens vão junto (CASCADE do schema).
+     * Se o pedido tiver entregas, o banco recusa (RESTRICT) e a
+     * mensagem vira uma frase para o atendente.
+     */
+    async excluirSeAbertoOuCancelado(id: number): Promise<boolean> {
+        try {
+            const resultado = await this.db.executar(
+                "DELETE FROM pedido WHERE id = ? AND status IN ('ABERTO', 'CANCELADO')",
+                [id],
+            );
+            return resultado.affectedRows === 1;
+        } catch (erro) {
+            if ((erro as { errno?: number } | null)?.errno === ERRO_EM_USO) {
+                throw new ErroDeNegocio('Este pedido já teve entregas e não pode ser excluído.');
+            }
+            throw erro;
+        }
     }
 
     // -------------------------------------------------------------------

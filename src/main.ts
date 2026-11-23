@@ -26,6 +26,7 @@ import { registrarFornecedoresIpc } from './main/ipc/fornecedoresIpc';
 import { registrarProdutosIpc } from './main/ipc/produtosIpc';
 import { registrarInicioIpc } from './main/ipc/inicioIpc';
 // --- Integrante 4 ----------------------------------------------------
+import { registrarPedidosIpc } from './main/ipc/pedidosIpc';
 
 // Instalador do Windows: ao instalar/desinstalar, só cria os atalhos e sai.
 if (started) {
@@ -46,6 +47,7 @@ function registrarTodosOsCanais(): void {
   registrarProdutosIpc(router);
   registrarInicioIpc(router);
   // --- Integrante 4 --------------------------------------------------
+  registrarPedidosIpc(router);
 }
 
 function criarJanela(): void {

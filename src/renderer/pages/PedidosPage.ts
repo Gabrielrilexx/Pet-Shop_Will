@@ -4,43 +4,46 @@
 // É a tela onde o atendente trabalha com os pedidos que chegam pelo
 // WhatsApp. Uma página só, com duas partes:
 //   1. a LISTA de pedidos, com um filtro por status (como a pilha de
-//      comandas presas no balcão, que dá para separar por cor);
+//      comandas presas no balcão, que dá para separar por cor) e os
+//      botões de cada pedido: Confirmar, Cancelar e Excluir;
 //   2. o FORMULÁRIO de novo pedido, que aparece ao clicar em "Novo
 //      pedido": escolher o cliente, adicionar produtos (vendo o
 //      estoque), conferir o subtotal e salvar.
 //
-// ESTADO ATUAL (PROVISÓRIO): a tela ainda NÃO conversa com o sistema,
-// porque o IpcRouter e o window.api do Integrante 1 (Passo 6) ainda não
-// existem. Por isso ela usa DADOS DE EXEMPLO fixos, copiados do
-// database/exemplo.sql, e mostra uma faixa amarela avisando isso.
-// No Passo 4, cada trecho marcado com "TROCAR NO PASSO 4" vira uma
-// chamada window.api.chamar(...).
+// Tudo passa pelo window.api.chamar(...) (o "balcão" do preload):
+//   pedidos:listar / salvar / confirmar / cancelar / excluir  (meus)
+//   produtos:listar  (Integrante 3)   auth:atual  (Integrante 1)
 //
-// Regras de segurança desta tela:
-//   - nada de onclick="..." no HTML: os botões são ligados pelo código
-//     (addEventListener), porque a Content-Security-Policy do Electron
-//     bloqueia código escrito dentro do HTML;
-//   - todo texto que vem de dados (nome de cliente, produto...) passa
-//     pelo escapar() antes de entrar no HTML, para um nome como
-//     "<script>..." aparecer como texto e não virar código;
-//   - a conferência de estoque AQUI é só conforto para o atendente.
-//     Quem decide de verdade é o Main (PedidoService), porque a tela
-//     pode ser burlada pelo DevTools.
+// PROVISÓRIO: a lista de CLIENTES ainda é fixa (os 4 clientes do
+// database/exemplo.sql, com os ids conferidos no banco), porque o canal
+// clientes:listar do Integrante 2 ainda não existe. Quando existir,
+// troque o trecho marcado com "TROCAR QUANDO EXISTIR clientes:listar".
+//
+// Regras de segurança desta tela (README, Passo 6):
+//   - nada de onclick="..." no HTML: os botões são ligados pelo código;
+//   - todo texto que vem de dados passa pelo escapar() do ui.ts;
+//   - a conferência de estoque AQUI é só conforto para o atendente:
+//     quem decide de verdade é o Main (PedidoService). Pelo mesmo
+//     motivo, a tela NÃO manda o preço: o Main lê o preço do banco.
 //
 // Autor: Integrante 4 (pedidos e entregas)
 // =====================================================================
 
-import type { Cliente, Pedido, Produto, StatusPedido } from '../../shared/tipos';
+import type { Cliente, Pedido, Perfil, Produto, StatusPedido, UsuarioSemSenha } from '../../shared/tipos';
+import { confirmar, escapar, mostrarAlerta } from '../ui';
+import type { TipoAlerta } from '../ui';
 
 // ---------------------------------------------------------------------
-// Os formatos que ESTA TELA usa. São "recortes" das interfaces do
-// tipos.ts (Pick = "pegue só estes campos"): a tela não precisa, nem
-// deve receber, o custo e a margem do produto, por exemplo.
+// Os formatos que ESTA TELA usa (Pick = "pegue só estes campos").
+// A tela não precisa do custo nem da margem do produto: o ATENDENTE
+// nem recebe esses campos (o Main corta antes de mandar).
 // ---------------------------------------------------------------------
-type ClienteNaTela = Pick<Cliente, 'id' | 'nome' | 'distancia_km'>;
+type ClienteNaTela = Pick<Cliente, 'id' | 'nome'>;
 type ProdutoNaTela = Pick<Produto, 'id' | 'nome' | 'preco_venda' | 'quantidade_estoque'>;
+/** Um pedido como o pedidos:listar devolve: com o nome do cliente junto. */
+type PedidoNaLista = Pedido & { cliente_nome: string };
 
-/** Uma linha do formulário de novo pedido (o nome e o preço são só para mostrar). */
+/** Uma linha do formulário de novo pedido (nome e preço são só para mostrar). */
 interface ItemNaTela {
     produto_id: number;
     nome: string;
@@ -49,48 +52,16 @@ interface ItemNaTela {
 }
 
 // =====================================================================
-// DADOS PROVISÓRIOS — TROCAR NO PASSO 4
-// Copiados do database/exemplo.sql só para enxergar a tela. Os ids aqui
-// são de mentira: no banco de verdade podem ser outros números.
+// TROCAR QUANDO EXISTIR clientes:listar (Integrante 2)
+// Os 4 clientes do exemplo.sql, com os ids conferidos no banco
+// (SELECT id, nome FROM cliente) em 23/11/2026.
 // =====================================================================
 const CLIENTES_PROVISORIOS: ClienteNaTela[] = [
-    { id: 1, nome: 'Ana Souza', distancia_km: 2.1 },
-    { id: 2, nome: 'Bruno Lima', distancia_km: 1.4 },
-    { id: 3, nome: 'Carla Mendes', distancia_km: 2.8 },
-    { id: 4, nome: 'Diego Rocha', distancia_km: null },
+    { id: 1, nome: 'Ana Souza' },
+    { id: 2, nome: 'Bruno Lima' },
+    { id: 3, nome: 'Carla Mendes' },
+    { id: 4, nome: 'Diego Rocha' },
 ];
-
-const PRODUTOS_PROVISORIOS: ProdutoNaTela[] = [
-    { id: 1, nome: 'Ração Premium Cão Adulto 15kg', preco_venda: 195.0, quantidade_estoque: 20 },
-    { id: 2, nome: 'Ração Gato Castrado 10kg', preco_venda: 156.0, quantidade_estoque: 15 },
-    { id: 3, nome: 'Alpiste 500g', preco_venda: 9.8, quantidade_estoque: 30 },
-    { id: 4, nome: 'Bolinha de Borracha', preco_venda: 9.6, quantidade_estoque: 40 },
-    { id: 5, nome: 'Coleira Ajustável M', preco_venda: 22.5, quantidade_estoque: 25 },
-    { id: 6, nome: 'Ração para Peixes Tropicais 50g', preco_venda: 12.0, quantidade_estoque: 3 },
-    { id: 7, nome: 'Arranhador para Gatos', preco_venda: 63.0, quantidade_estoque: 0 },
-    { id: 8, nome: 'Antipulgas Importado (cães)', preco_venda: 94.5, quantidade_estoque: 12 },
-    { id: 9, nome: 'Vermífugo Importado (gatos)', preco_venda: 67.3, quantidade_estoque: 8 },
-];
-
-const PEDIDOS_PROVISORIOS: Pedido[] = [
-    {
-        id: 1, cliente_id: 1, usuario_id: 1, data_pedido: new Date(2026, 10, 22, 9, 15),
-        status: 'ENTREGUE', subtotal: 390, taxa_entrega: 4.2, total: 394.2, observacao: null
-    },
-    {
-        id: 2, cliente_id: 2, usuario_id: 1, data_pedido: new Date(2026, 10, 22, 10, 40),
-        status: 'EM_ROTA', subtotal: 94.5, taxa_entrega: 3.5, total: 98, observacao: 'Apto 12'
-    },
-    {
-        id: 3, cliente_id: 3, usuario_id: 1, data_pedido: new Date(2026, 10, 22, 11, 5),
-        status: 'CONFIRMADO', subtotal: 156, taxa_entrega: 0, total: 156, observacao: null
-    },
-    {
-        id: 4, cliente_id: 4, usuario_id: 1, data_pedido: new Date(2026, 10, 22, 11, 30),
-        status: 'ABERTO', subtotal: 19.2, taxa_entrega: 0, total: 19.2, observacao: null
-    },
-];
-// ======================== fim dos dados provisórios ===================
 
 /** Como cada status aparece na tela (texto e cor do Bootstrap). */
 const STATUS: Record<StatusPedido, { rotulo: string; cor: string }> = {
@@ -108,24 +79,29 @@ const dataHora = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyl
 export class PedidosPage {
     // "!" = "prometo que vou preencher antes de usar" (é preenchido no render).
     private app!: HTMLElement;
+    private perfil: Perfil = 'ATENDENTE'; // na dúvida, o perfil com MENOS botões
     private clientes: ClienteNaTela[] = [];
     private produtos: ProdutoNaTela[] = [];
-    private pedidos: Pedido[] = [];
+    private pedidos: PedidoNaLista[] = [];
     private itens: ItemNaTela[] = []; // os itens do pedido que está sendo montado
 
     /** Desenha a página dentro do <main id="app"> (contrato do Integrante 1). */
     async render(app: HTMLElement): Promise<void> {
         this.app = app;
-
-        // TROCAR NO PASSO 4: buscar no sistema com window.api.chamar(...)
-        // ('clientes:listar', 'produtos:listar' e 'pedidos:listar').
-        this.clientes = CLIENTES_PROVISORIOS;
-        this.produtos = PRODUTOS_PROVISORIOS;
-        this.pedidos = [...PEDIDOS_PROVISORIOS]; // cópia, para não estragar o original
-
         app.innerHTML = this.montarHtml();
         this.ligarEventos();
-        this.desenharLista();
+
+        // Quem está logado? Só para decidir se o botão "Excluir" aparece.
+        // (Esconder o botão é conforto: o Main recusa o ATENDENTE de qualquer jeito.)
+        const atual = await window.api.chamar<UsuarioSemSenha>('auth:atual');
+        if (atual.ok) this.perfil = atual.dados.perfil;
+
+        // TROCAR QUANDO EXISTIR clientes:listar:
+        //   const r = await window.api.chamar<Cliente[]>('clientes:listar');
+        this.clientes = CLIENTES_PROVISORIOS;
+        this.desenharOpcoesDeClientes();
+
+        await Promise.all([this.carregarProdutos(), this.carregarPedidos()]);
     }
 
     // ===================================================================
@@ -137,104 +113,81 @@ export class PedidosPage {
             .map(([valor, s]) => `<option value="${valor}">${s.rotulo}</option>`)
             .join('');
 
-        const opcoesClientes = this.clientes
-            .map((c) => `<option value="${c.id}">${escapar(c.nome)}</option>`)
-            .join('');
-
-        // Produto sem estoque aparece, mas desabilitado (não dá para escolher).
-        const opcoesProdutos = this.produtos
-            .map((p) => {
-                const semEstoque = p.quantidade_estoque <= 0;
-                const texto = `${p.nome} — ${reais.format(p.preco_venda)} ` +
-                    (semEstoque ? '(sem estoque)' : `(estoque: ${p.quantidade_estoque})`);
-                return `<option value="${p.id}" ${semEstoque ? 'disabled' : ''}>${escapar(texto)}</option>`;
-            })
-            .join('');
-
         return `
-      <div class="container-fluid py-3">
-        <div class="alert alert-warning py-2 small">
-          <strong>Dados de exemplo (provisório).</strong>
-          Esta tela ainda não está ligada ao sistema: nada é salvo no banco.
-        </div>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h4 mb-0">Pedidos</h2>
+        <button type="button" id="pedidos-novo" class="btn btn-primary">+ Novo pedido</button>
+      </div>
 
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h2 class="h4 mb-0">Pedidos</h2>
-          <button id="pedidos-novo" class="btn btn-primary">+ Novo pedido</button>
-        </div>
+      <div id="pedidos-alerta"></div>
 
-        <div id="pedidos-alerta"></div>
+      <!-- ============ FORMULÁRIO DE NOVO PEDIDO (começa escondido) ============ -->
+      <div id="pedidos-formulario" class="card mb-4 d-none">
+        <div class="card-header fw-semibold">Novo pedido</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="pedidos-cliente" class="form-label">Cliente</label>
+            <select id="pedidos-cliente" class="form-select"></select>
+            <div class="form-text">Provisório: os clientes do exemplo, até existir o cadastro de clientes.</div>
+          </div>
 
-        <!-- ============ FORMULÁRIO DE NOVO PEDIDO (começa escondido) ============ -->
-        <div id="pedidos-formulario" class="card mb-4 d-none">
-          <div class="card-header fw-semibold">Novo pedido</div>
-          <div class="card-body">
-            <div class="mb-3">
-              <label for="pedidos-cliente" class="form-label">Cliente</label>
-              <select id="pedidos-cliente" class="form-select">
-                <option value="">Escolha o cliente...</option>
-                ${opcoesClientes}
-              </select>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-7">
+              <label for="pedidos-produto" class="form-label">Produto</label>
+              <select id="pedidos-produto" class="form-select"></select>
             </div>
-
-            <div class="row g-2 align-items-end mb-3">
-              <div class="col-md-7">
-                <label for="pedidos-produto" class="form-label">Produto</label>
-                <select id="pedidos-produto" class="form-select">
-                  <option value="">Escolha o produto...</option>
-                  ${opcoesProdutos}
-                </select>
-              </div>
-              <div class="col-md-2">
-                <label for="pedidos-quantidade" class="form-label">Quantidade</label>
-                <input id="pedidos-quantidade" type="number" min="1" step="1" value="1" class="form-control">
-              </div>
-              <div class="col-md-3 d-grid">
-                <button id="pedidos-adicionar" class="btn btn-outline-primary">Adicionar item</button>
-              </div>
+            <div class="col-md-2">
+              <label for="pedidos-quantidade" class="form-label">Quantidade</label>
+              <input id="pedidos-quantidade" type="number" min="1" step="1" value="1" class="form-control">
             </div>
-
-            <table class="table table-sm align-middle">
-              <thead>
-                <tr><th>Produto</th><th class="text-end">Qtd.</th>
-                    <th class="text-end">Preço un.</th><th class="text-end">Total</th><th></th></tr>
-              </thead>
-              <tbody id="pedidos-itens"></tbody>
-            </table>
-
-            <div class="d-flex justify-content-end gap-4 mb-3">
-              <span class="text-muted">Taxa de entrega: calculada na saída do motoboy</span>
-              <span class="fw-semibold">Subtotal: <span id="pedidos-subtotal">R$ 0,00</span></span>
-            </div>
-
-            <div class="mb-3">
-              <label for="pedidos-observacao" class="form-label">Observação (opcional)</label>
-              <textarea id="pedidos-observacao" class="form-control" rows="2" maxlength="255"></textarea>
-            </div>
-
-            <div class="d-flex justify-content-end gap-2">
-              <button id="pedidos-cancelar" class="btn btn-outline-secondary">Cancelar</button>
-              <button id="pedidos-salvar" class="btn btn-success">Salvar pedido</button>
+            <div class="col-md-3 d-grid">
+              <button type="button" id="pedidos-adicionar" class="btn btn-outline-primary">Adicionar item</button>
             </div>
           </div>
-        </div>
 
-        <!-- ============ LISTA DE PEDIDOS ============ -->
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <label for="pedidos-filtro" class="form-label mb-0">Status:</label>
-          <select id="pedidos-filtro" class="form-select form-select-sm w-auto">
-            <option value="">Todos</option>
-            ${opcoesStatus}
-          </select>
-        </div>
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr><th>Produto</th><th class="text-end">Qtd.</th>
+                  <th class="text-end">Preço un.</th><th class="text-end">Total</th><th></th></tr>
+            </thead>
+            <tbody id="pedidos-itens"></tbody>
+          </table>
 
-        <table class="table table-hover align-middle">
-          <thead>
-            <tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Status</th><th class="text-end">Total</th></tr>
-          </thead>
-          <tbody id="pedidos-lista"></tbody>
-        </table>
-      </div>`;
+          <div class="d-flex justify-content-end gap-4 mb-3">
+            <span class="text-secondary">Taxa de entrega: calculada na saída do motoboy</span>
+            <span class="fw-semibold">Subtotal: <span id="pedidos-subtotal">R$ 0,00</span></span>
+          </div>
+
+          <div class="mb-3">
+            <label for="pedidos-observacao" class="form-label">Observação (opcional)</label>
+            <textarea id="pedidos-observacao" class="form-control" rows="2" maxlength="255"></textarea>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" id="pedidos-cancelar-form" class="btn btn-outline-secondary">Fechar</button>
+            <button type="button" id="pedidos-salvar" class="btn btn-success">Salvar pedido</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ LISTA DE PEDIDOS ============ -->
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <label for="pedidos-filtro" class="form-label mb-0">Status:</label>
+        <select id="pedidos-filtro" class="form-select form-select-sm w-auto">
+          <option value="">Todos</option>
+          ${opcoesStatus}
+        </select>
+      </div>
+
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Status</th>
+              <th class="text-end">Total</th><th></th></tr>
+        </thead>
+        <tbody id="pedidos-lista">
+          <tr><td colspan="6" class="text-secondary">Carregando...</td></tr>
+        </tbody>
+      </table>`;
     }
 
     // ===================================================================
@@ -244,13 +197,12 @@ export class PedidosPage {
     private ligarEventos(): void {
         this.el('pedidos-filtro').addEventListener('change', () => this.desenharLista());
         this.el('pedidos-novo').addEventListener('click', () => this.abrirFormulario());
-        this.el('pedidos-cancelar').addEventListener('click', () => this.fecharFormulario());
+        this.el('pedidos-cancelar-form').addEventListener('click', () => this.fecharFormulario());
         this.el('pedidos-adicionar').addEventListener('click', () => this.adicionarItem());
-        this.el('pedidos-salvar').addEventListener('click', () => this.salvar());
+        this.el('pedidos-salvar').addEventListener('click', () => void this.salvar());
 
-        // Botões "Remover" de cada item: em vez de ligar um por um (eles são
-        // criados e apagados toda hora), ligamos UM "ouvido" na tabela toda
-        // e descobrimos qual botão foi clicado pelo data-indice dele.
+        // Botões "Remover" de cada item do formulário (delegação de eventos):
+        // UM "ouvido" na tabela, que descobre o botão pelo data-indice.
         this.el('pedidos-itens').addEventListener('click', (evento) => {
             const botao = (evento.target as HTMLElement).closest<HTMLElement>('[data-indice]');
             if (botao) {
@@ -258,37 +210,146 @@ export class PedidosPage {
                 this.desenharItens();
             }
         });
+
+        // Botões de cada pedido da lista (mesma ideia, padrão da UsuariosPage):
+        // data-acao diz O QUE fazer; data-id diz COM QUAL pedido.
+        this.el('pedidos-lista').addEventListener('click', (evento) => {
+            const botao = (evento.target as HTMLElement).closest<HTMLButtonElement>('button[data-acao]');
+            if (botao) void this.executarAcao(botao.dataset.acao ?? '', Number(botao.dataset.id));
+        });
     }
 
     // ===================================================================
-    // 3. A LISTA DE PEDIDOS
+    // 3. BUSCAR DADOS NO MAIN
+    // ===================================================================
+
+    private async carregarPedidos(): Promise<void> {
+        const resposta = await window.api.chamar<PedidoNaLista[]>('pedidos:listar');
+        if (!resposta.ok) {
+            this.el('pedidos-lista').innerHTML = '';
+            this.alerta('danger', resposta.erro);
+            return;
+        }
+        this.pedidos = resposta.dados;
+        this.desenharLista();
+    }
+
+    private async carregarProdutos(): Promise<void> {
+        const resposta = await window.api.chamar<ProdutoNaTela[]>('produtos:listar');
+        if (!resposta.ok) {
+            this.alerta('danger', resposta.erro);
+            return;
+        }
+        this.produtos = resposta.dados;
+        this.desenharOpcoesDeProdutos();
+    }
+
+    // ===================================================================
+    // 4. A LISTA DE PEDIDOS
     // ===================================================================
 
     private desenharLista(): void {
         const filtro = this.el<HTMLSelectElement>('pedidos-filtro').value;
         const visiveis = filtro ? this.pedidos.filter((p) => p.status === filtro) : this.pedidos;
 
-        this.el('pedidos-lista').innerHTML = visiveis.length === 0
-            ? '<tr><td colspan="5" class="text-center text-muted">Nenhum pedido com esse status.</td></tr>'
-            : visiveis
-                .map((p) => {
-                    const s = STATUS[p.status];
-                    const data = p.data_pedido ? dataHora.format(p.data_pedido) : '';
-                    return `
-              <tr>
-                <td>${p.id}</td>
-                <td>${data}</td>
-                <td>${escapar(this.nomeDoCliente(p.cliente_id))}</td>
-                <td><span class="badge text-bg-${s.cor}">${s.rotulo}</span></td>
-                <td class="text-end">${reais.format(p.total)}</td>
-              </tr>`;
-                })
-                .join('');
+        this.el('pedidos-lista').innerHTML =
+            visiveis.length === 0
+                ? '<tr><td colspan="6" class="text-center text-secondary">Nenhum pedido com esse status.</td></tr>'
+                : visiveis.map((p) => this.linha(p)).join('');
+    }
+
+    /** O HTML de uma linha. Cada botão só aparece quando a ação faz sentido. */
+    private linha(p: PedidoNaLista): string {
+        const s = STATUS[p.status];
+        // A data atravessa o IPC como Date; "new Date(...)" garante, mesmo se vier como texto.
+        const data = p.data_pedido ? dataHora.format(new Date(p.data_pedido)) : '-';
+
+        const botoes: string[] = [];
+        if (p.status === 'ABERTO') {
+            botoes.push(this.botao('confirmar', p.id, 'Confirmar', 'success'));
+        }
+        if (p.status === 'ABERTO' || p.status === 'CONFIRMADO') {
+            botoes.push(this.botao('cancelar', p.id, 'Cancelar', 'warning'));
+        }
+        if (this.perfil === 'ADMIN' && (p.status === 'ABERTO' || p.status === 'CANCELADO')) {
+            botoes.push(this.botao('excluir', p.id, 'Excluir', 'danger'));
+        }
+
+        return `
+      <tr>
+        <td>${p.id}</td>
+        <td>${data}</td>
+        <td>${escapar(p.cliente_nome)}</td>
+        <td><span class="badge text-bg-${s.cor}">${s.rotulo}</span></td>
+        <td class="text-end">${reais.format(p.total)}</td>
+        <td class="text-end text-nowrap">${botoes.join(' ')}</td>
+      </tr>`;
+    }
+
+    private botao(acao: string, id: number, texto: string, cor: string): string {
+        return `<button type="button" class="btn btn-sm btn-outline-${cor}" data-acao="${acao}" data-id="${id}">${texto}</button>`;
+    }
+
+    /** Decide o que fazer conforme o botão clicado na lista. */
+    private async executarAcao(acao: string, id: number): Promise<void> {
+        const pedido = this.pedidos.find((p) => p.id === id);
+        if (!pedido) return;
+        const quem = `pedido nº ${id} (${pedido.cliente_nome})`;
+
+        if (acao === 'confirmar') {
+            await this.enviar('pedidos:confirmar', id, `O ${quem} foi confirmado e o estoque foi baixado.`);
+        }
+        if (acao === 'cancelar') {
+            const extra = pedido.status === 'CONFIRMADO' ? ' Os produtos voltam para o estoque.' : '';
+            if (await confirmar('Cancelar pedido', `Cancelar o ${quem}?${extra}`, 'Cancelar pedido')) {
+                await this.enviar('pedidos:cancelar', id, `O ${quem} foi cancelado.`);
+            }
+        }
+        if (acao === 'excluir') {
+            if (await confirmar('Excluir pedido', `Excluir o ${quem}? Esta ação não pode ser desfeita.`, 'Excluir')) {
+                await this.enviar('pedidos:excluir', id, `O ${quem} foi excluído.`);
+            }
+        }
+    }
+
+    /**
+     * Manda uma ação ao Main. Deu certo: mostra a mensagem e recarrega a
+     * lista E os produtos (confirmar e cancelar mudam o estoque).
+     */
+    private async enviar(canal: string, id: number, sucesso: string): Promise<void> {
+        const resposta = await window.api.chamar<void>(canal, id);
+        if (!resposta.ok) {
+            this.alerta('danger', resposta.erro);
+            return;
+        }
+        this.alerta('success', sucesso);
+        await Promise.all([this.carregarPedidos(), this.carregarProdutos()]);
     }
 
     // ===================================================================
-    // 4. O FORMULÁRIO DE NOVO PEDIDO
+    // 5. O FORMULÁRIO DE NOVO PEDIDO
     // ===================================================================
+
+    private desenharOpcoesDeClientes(): void {
+        const opcoes = this.clientes
+            .map((c) => `<option value="${c.id}">${escapar(c.nome)}</option>`)
+            .join('');
+        this.el('pedidos-cliente').innerHTML = `<option value="">Escolha o cliente...</option>${opcoes}`;
+    }
+
+    /** Produto sem estoque aparece, mas desabilitado (não dá para escolher). */
+    private desenharOpcoesDeProdutos(): void {
+        const opcoes = this.produtos
+            .map((p) => {
+                const semEstoque = p.quantidade_estoque <= 0;
+                const texto =
+                    `${p.nome} — ${reais.format(p.preco_venda)} ` +
+                    (semEstoque ? '(sem estoque)' : `(estoque: ${p.quantidade_estoque})`);
+                return `<option value="${p.id}" ${semEstoque ? 'disabled' : ''}>${escapar(texto)}</option>`;
+            })
+            .join('');
+        this.el('pedidos-produto').innerHTML = `<option value="">Escolha o produto...</option>${opcoes}`;
+    }
 
     private abrirFormulario(): void {
         this.itens = [];
@@ -312,18 +373,17 @@ export class PedidosPage {
         const produto = this.produtos.find((p) => p.id === produtoId);
 
         // Conferências na ordem em que o atendente erraria.
-        if (!produto) return this.mostrarAlerta('warning', 'Escolha um produto.');
+        if (!produto) return this.alerta('warning', 'Escolha um produto.');
         if (!Number.isInteger(quantidade) || quantidade < 1) {
-            return this.mostrarAlerta('warning', 'A quantidade precisa ser um número inteiro maior que zero.');
+            return this.alerta('warning', 'A quantidade precisa ser um número inteiro maior que zero.');
         }
 
         // Se o produto já está na lista, a quantidade nova SOMA com a que
         // já foi adicionada, e a soma não pode passar do estoque.
         const existente = this.itens.find((i) => i.produto_id === produtoId);
-        const jaAdicionado = existente?.quantidade ?? 0;
-        const disponivel = produto.quantidade_estoque - jaAdicionado;
+        const disponivel = produto.quantidade_estoque - (existente?.quantidade ?? 0);
         if (quantidade > disponivel) {
-            return this.mostrarAlerta(
+            return this.alerta(
                 'warning',
                 `Só há ${disponivel} unidade(s) disponível(is) de "${produto.nome}".`,
             );
@@ -347,70 +407,67 @@ export class PedidosPage {
 
     /** Redesenha a tabela de itens e o subtotal. */
     private desenharItens(): void {
-        this.el('pedidos-itens').innerHTML = this.itens.length === 0
-            ? '<tr><td colspan="5" class="text-center text-muted">Nenhum item adicionado.</td></tr>'
-            : this.itens
-                .map((item, indice) => `
+        this.el('pedidos-itens').innerHTML =
+            this.itens.length === 0
+                ? '<tr><td colspan="5" class="text-center text-secondary">Nenhum item adicionado.</td></tr>'
+                : this.itens
+                    .map(
+                        (item, indice) => `
             <tr>
               <td>${escapar(item.nome)}</td>
               <td class="text-end">${item.quantidade}</td>
               <td class="text-end">${reais.format(item.preco_unitario)}</td>
               <td class="text-end">${reais.format(item.quantidade * item.preco_unitario)}</td>
               <td class="text-end">
-                <button class="btn btn-sm btn-outline-danger" data-indice="${indice}">Remover</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-indice="${indice}">Remover</button>
               </td>
-            </tr>`)
-                .join('');
+            </tr>`,
+                    )
+                    .join('');
 
         this.el('pedidos-subtotal').textContent = reais.format(this.subtotal());
     }
 
-    /** Soma de quantidade x preço de todos os itens. */
+    /** Soma de quantidade x preço (só para mostrar: o Main recalcula). */
     private subtotal(): number {
-        // reduce = "passe por todos, acumulando um valor" (começa em 0).
         const soma = this.itens.reduce((acc, i) => acc + i.quantidade * i.preco_unitario, 0);
-        return Math.round(soma * 100) / 100; // arredonda para centavos
+        return Math.round(soma * 100) / 100;
     }
 
-    private salvar(): void {
+    private async salvar(): Promise<void> {
         const clienteId = Number(this.el<HTMLSelectElement>('pedidos-cliente').value);
         const observacao = this.el<HTMLTextAreaElement>('pedidos-observacao').value.trim();
 
-        if (!clienteId) return this.mostrarAlerta('warning', 'Escolha o cliente.');
-        if (this.itens.length === 0) return this.mostrarAlerta('warning', 'Adicione pelo menos um item.');
+        if (!clienteId) return this.alerta('warning', 'Escolha o cliente.');
+        if (this.itens.length === 0) return this.alerta('warning', 'Adicione pelo menos um item.');
 
-        // O que a tela vai mandar ao sistema no Passo 4. Repare: só o id do
-        // produto e a quantidade. O PREÇO não vai: quem define o preço é o
-        // Main, lendo do banco (a tela poderia ser alterada pelo DevTools).
+        // Só o id do produto e a quantidade. O PREÇO não vai: o Main lê do
+        // banco. O usuário também não vai: o Main sabe quem está logado.
         const pedido = {
             cliente_id: clienteId,
             observacao: observacao || null,
             itens: this.itens.map((i) => ({ produto_id: i.produto_id, quantidade: i.quantidade })),
         };
 
-        // TROCAR NO PASSO 4: const resposta = await window.api.chamar('pedidos:salvar', pedido);
-        // Por enquanto, só mostramos na lista (de mentira) e no console.
-        console.log('[provisório] pedido que seria enviado:', pedido);
-        const subtotal = this.subtotal();
-        this.pedidos.push({
-            id: Math.max(0, ...this.pedidos.map((p) => p.id)) + 1,
-            cliente_id: clienteId,
-            usuario_id: 1,
-            data_pedido: new Date(),
-            status: 'ABERTO',
-            subtotal,
-            taxa_entrega: 0,
-            total: subtotal,
-            observacao: pedido.observacao,
-        });
-
-        this.fecharFormulario();
-        this.desenharLista();
-        this.mostrarAlerta('success', 'Pedido registrado como ABERTO (provisório: ainda não foi salvo no banco).');
+        // Desliga o botão enquanto espera: dois cliques não criam dois pedidos.
+        const botao = this.el<HTMLButtonElement>('pedidos-salvar');
+        botao.disabled = true;
+        try {
+            const resposta = await window.api.chamar<number>('pedidos:salvar', pedido);
+            if (!resposta.ok) {
+                this.alerta('danger', resposta.erro);
+                return;
+            }
+            this.fecharFormulario();
+            this.alerta('success', `Pedido nº ${resposta.dados} registrado como ABERTO.`);
+            await this.carregarPedidos();
+        } finally {
+            botao.disabled = false; // "finally" = religa dando certo ou não
+        }
     }
 
     // ===================================================================
-    // 5. AJUDANTES
+    // 6. AJUDANTES
     // ===================================================================
 
     /** Busca um elemento da página pelo id; dá erro claro se não achar. */
@@ -420,33 +477,12 @@ export class PedidosPage {
         return elemento;
     }
 
-    private nomeDoCliente(id: number): string {
-        return this.clientes.find((c) => c.id === id)?.nome ?? `Cliente ${id}`;
-    }
-
-    /** Mostra um aviso Bootstrap (warning, danger ou success). */
-    private mostrarAlerta(tipo: 'warning' | 'danger' | 'success', mensagem: string): void {
-        const caixa = document.createElement('div');
-        caixa.className = `alert alert-${tipo}`;
-        caixa.textContent = mensagem; // textContent: o texto nunca vira HTML
-        this.el('pedidos-alerta').replaceChildren(caixa);
+    /** Mostra um aviso usando o mostrarAlerta do ui.ts (Integrante 1). */
+    private alerta(tipo: TipoAlerta, mensagem: string): void {
+        mostrarAlerta(this.el('pedidos-alerta'), tipo, mensagem);
     }
 
     private limparAlerta(): void {
         this.el('pedidos-alerta').replaceChildren();
     }
-}
-
-/**
- * Troca os caracteres especiais do HTML por "códigos" seguros.
- * Um cliente chamado <b>Ana</b> aparece com os sinais < e >, em vez de
- * virar texto em negrito (ou, pior, um <script> que roda código).
- */
-function escapar(texto: string): string {
-    return texto
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
