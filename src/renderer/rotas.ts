@@ -14,6 +14,7 @@ import type { Perfil } from '../shared/tipos';
 import { UsuariosPage } from './pages/UsuariosPage';
 // --- Integrante 2 ----------------------------------------------------
 // --- Integrante 3 ----------------------------------------------------
+import { CatalogoPage } from './pages/CatalogoPage';
 // --- Integrante 4 ----------------------------------------------------
 
 /** O que toda página precisa ter (contrato da Arquitetura). */
@@ -34,5 +35,6 @@ export const ROTAS: Rota[] = [
   { id: 'usuarios', titulo: 'Usuários', perfis: ['ADMIN'], criar: () => new UsuariosPage() },
   // --- Integrante 2 --------------------------------------------------
   // --- Integrante 3 --------------------------------------------------
+  { id: 'catalogo', titulo: 'Catálogo', perfis: ['ADMIN', 'ATENDENTE'], criar: () => new CatalogoPage() },
   // --- Integrante 4 --------------------------------------------------
 ];
