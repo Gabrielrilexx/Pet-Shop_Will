@@ -25,6 +25,10 @@ export const CANAIS_PERMITIDOS: readonly string[] = [
   'usuarios:redefinirSenha',
 
   // --- Integrante 2: clientes e entregadores --------------------------
+  'clientes:listar',
+  'clientes:salvar',
+  'clientes:excluir',
+  'clientes:buscarCep',
 
   // --- Integrante 3: espécies, categorias, fornecedores, produtos e início
   'especies:listar',

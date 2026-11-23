@@ -22,8 +22,10 @@
 //   - endereço que não existe: lista vazia [] e NÃO um erro.
 //
 // Quem usa: o ClienteService (Passo 5), ao salvar um cliente. Se esta
-// classe lançar erro, o cliente é salvo SEM distância (NULL) e a tela
-// avisa. Nunca um número inventado: distância errada = taxa errada.
+// classe devolver null (não achou) ou lançar erro (mapa fora do ar), o
+// cliente é salvo SEM distância (NULL) e a tela avisa, com uma mensagem
+// diferente para cada caso. Nunca um número inventado: distância
+// errada = taxa errada.
 // =====================================================================
 
 import { HttpClient } from './HttpClient';
@@ -73,11 +75,12 @@ export class GeocodificacaoClient extends HttpClient {
   /**
    * Descobre latitude e longitude de um endereço.
    *
-   * Lança ErroDeNegocio se:
-   *   - o endereço não for encontrado nem com nem sem o número;
-   *   - o Nominatim estiver fora do ar ou demorar mais de 5 segundos.
+   * Devolve null se o endereço não for encontrado nem com nem sem o
+   * número (o mapa respondeu, só não achou: o atendente pode corrigir).
+   * Lança ErroDeNegocio se o Nominatim estiver fora do ar, demorar mais
+   * de 5 segundos ou mandar uma resposta estranha.
    */
-  async localizar(endereco: EnderecoParaMapa): Promise<Coordenadas> {
+  async localizar(endereco: EnderecoParaMapa): Promise<Coordenadas | null> {
     const logradouro = endereco.logradouro.trim();
     const numero = endereco.numero.trim();
     const cidade = endereco.cidade.trim();
@@ -94,12 +97,7 @@ export class GeocodificacaoClient extends HttpClient {
       ponto = await this.consultar(semNumero.join(', '));
     }
 
-    if (ponto === null) {
-      throw new ErroDeNegocio(
-        'Endereço não encontrado no mapa. Confira a rua e a cidade.',
-      );
-    }
-    return ponto;
+    return ponto; // null = não achou nem sem o número
   }
 
   /**

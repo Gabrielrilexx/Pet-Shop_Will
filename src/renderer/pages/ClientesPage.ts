@@ -10,11 +10,13 @@
 //   2. a LISTA, com a distância da loja até a casa de cada cliente e
 //      os botões Editar e Excluir.
 //
-// ESTADO ATUAL (PROVISÓRIO — Passo 2 do Integrante 2): só o LAYOUT.
-// A tela ainda NÃO conversa com o Main: mostra os clientes de exemplo
-// do database/exemplo.sql e uma faixa amarela avisando isso. Cada
-// trecho marcado com "TROCAR NO PASSO 5" vira uma chamada
-// window.api.chamar(...) quando o ClienteService existir.
+// A distância NÃO é digitada: o Main calcula ao salvar (Nominatim +
+// OSRM). Se o serviço de mapas falhar, o cliente é salvo mesmo assim,
+// sem distância, e a tela mostra o aviso amarelo que o Main mandar.
+//
+// Canais usados (todos do Integrante 2, menos o auth:atual do Caio):
+//   clientes:listar, clientes:salvar, clientes:excluir (só ADMIN),
+//   clientes:buscarCep e auth:atual (para saber quem está logado).
 //
 // Mesmo padrão das outras telas (UsuariosPage, FornecedoresPage):
 //   - nada de onclick="..." no HTML: os botões são ligados pelo código
@@ -23,49 +25,31 @@
 //   - todo texto que vem de dados passa pelo escapar() antes de entrar
 //     no HTML, para um nome como "<script>" aparecer como texto;
 //   - ids sempre começando com "clientes-", para não bater com os ids
-//     de outra tela.
+//     de outra tela;
+//   - a validação de verdade é no Main (ClienteService): a tela pode
+//     ser burlada pelo DevTools.
 //
 // Autor: Integrante 2 (clientes e entregadores)
 // =====================================================================
 
-import type { Cliente } from '../../shared/tipos';
+import type { Cliente, Perfil, UsuarioSemSenha } from '../../shared/tipos';
 import { confirmar, escapar, mostrarAlerta } from '../ui';
 import type { TipoAlerta } from '../ui';
 
-// =====================================================================
-// DADOS PROVISÓRIOS — TROCAR NO PASSO 5
-// Copiados do database/exemplo.sql só para enxergar a tela. Os ids aqui
-// são de mentira: no banco de verdade podem ser outros números.
-// A "Diego Rocha" está SEM distância (null), como quando a API de mapas
-// falha: serve para ver como a tela mostra esse caso.
-// =====================================================================
-const CLIENTES_PROVISORIOS: Cliente[] = [
-  {
-    id: 1, nome: 'Ana Souza', telefone: '(19) 90000-0001', cep: '13480001',
-    logradouro: 'Rua Senador Vergueiro', numero: '120', complemento: null,
-    bairro: 'Centro', cidade: 'Limeira', uf: 'SP',
-    latitude: null, longitude: null, distancia_km: 2.1,
-  },
-  {
-    id: 2, nome: 'Bruno Lima', telefone: '(19) 90000-0002', cep: '13480010',
-    logradouro: 'Rua Carlos Gomes', numero: '455', complemento: 'Apto 12',
-    bairro: 'Centro', cidade: 'Limeira', uf: 'SP',
-    latitude: null, longitude: null, distancia_km: 1.4,
-  },
-  {
-    id: 3, nome: 'Carla Mendes', telefone: '(19) 90000-0003', cep: '13480210',
-    logradouro: 'Rua Barão de Campinas', numero: '300', complemento: null,
-    bairro: 'Centro', cidade: 'Limeira', uf: 'SP',
-    latitude: null, longitude: null, distancia_km: 2.8,
-  },
-  {
-    id: 4, nome: 'Diego Rocha', telefone: '(19) 90000-0004', cep: '13480040',
-    logradouro: 'Rua Santa Cruz', numero: '88', complemento: 'Casa 2',
-    bairro: 'Centro', cidade: 'Limeira', uf: 'SP',
-    latitude: null, longitude: null, distancia_km: null,
-  },
-];
-// ======================== fim dos dados provisórios ===================
+// ---------------------------------------------------------------------
+// Os formatos que o Main devolve para ESTA tela (mesmo jeito da
+// FornecedoresPage: a tela descreve o que recebe, sem importar nada
+// do processo Main).
+// ---------------------------------------------------------------------
+
+/** O que o "Buscar CEP" devolve (clientes:buscarCep). */
+type EnderecoDoCep = Pick<Cliente, 'cep' | 'logradouro' | 'bairro' | 'cidade' | 'uf'>;
+
+/** O que o "Salvar" devolve (clientes:salvar). aviso = null se deu tudo certo. */
+interface ClienteSalvo {
+  id: number;
+  aviso: string | null;
+}
 
 /** Distância do jeito brasileiro: 2.1 -> "2,10 km". */
 const quilometros = new Intl.NumberFormat('pt-BR', {
@@ -78,16 +62,12 @@ export class ClientesPage {
   private app!: HTMLElement;
   private clientes: Cliente[] = [];
   private idEmEdicao: number | null = null; // null = cadastrando um novo
+  private perfil: Perfil | null = null; // quem está logado (para o botão Excluir)
 
   /** Desenha a página dentro do <main id="app"> (contrato do Integrante 1). */
   async render(app: HTMLElement): Promise<void> {
     this.app = app;
     app.innerHTML = `
-      <div class="alert alert-warning py-2 small">
-        <strong>Dados de exemplo (provisório).</strong>
-        Esta tela ainda não está ligada ao sistema: nada é salvo no banco.
-      </div>
-
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="h4 mb-0">Clientes</h2>
         <button type="button" id="clientes-novo" class="btn btn-primary">Novo cliente</button>
@@ -174,10 +154,10 @@ export class ClientesPage {
     // Ligações dos botões (uma vez só, ao abrir a tela)
     this.el('clientes-novo').addEventListener('click', () => this.abrirFormulario());
     this.el('clientes-cancelar').addEventListener('click', () => this.fecharFormulario());
-    this.el('clientes-buscar-cep').addEventListener('click', () => this.buscarCep());
+    this.el('clientes-buscar-cep').addEventListener('click', () => void this.buscarCep());
     this.el('clientes-form').addEventListener('submit', (evento) => {
       evento.preventDefault(); // não deixa o formulário recarregar a página
-      this.salvar();
+      void this.salvar();
     });
     // Um único "ouvinte" na lista inteira (delegação de eventos): o clique
     // em qualquer botão "sobe" até o <tbody>, e lá lemos data-acao e
@@ -187,20 +167,30 @@ export class ClientesPage {
       if (botao) void this.executarAcao(botao.dataset.acao ?? '', Number(botao.dataset.id));
     });
 
-    this.carregar();
+    // Quem está logado? Só o ADMIN vê o botão Excluir. (Esconder é só
+    // conforto: quem impede de verdade é o IpcRouter, no Main.)
+    const atual = await window.api.chamar<UsuarioSemSenha>('auth:atual');
+    if (atual.ok) this.perfil = atual.dados.perfil;
+
+    await this.carregar();
   }
 
   // -------------------------------------------------------------------
   // Lista
   // -------------------------------------------------------------------
 
-  /** Pega os clientes e desenha a tabela. */
-  private carregar(): void {
-    // TROCAR NO PASSO 5: const resposta = await window.api.chamar<Cliente[]>('clientes:listar');
-    // (e, se resposta.ok for false, mostrar resposta.erro no alerta)
-    this.clientes = [...CLIENTES_PROVISORIOS]; // cópia, para não estragar o original
-
+  /** Busca os clientes no Main e desenha a tabela. */
+  private async carregar(): Promise<void> {
+    const resposta = await window.api.chamar<Cliente[]>('clientes:listar');
     const lista = this.el('clientes-lista');
+
+    if (!resposta.ok) {
+      lista.innerHTML = '';
+      this.alerta('danger', resposta.erro);
+      return;
+    }
+
+    this.clientes = resposta.dados;
     if (this.clientes.length === 0) {
       lista.innerHTML =
         '<tr><td colspan="6" class="text-secondary">Nenhum cliente cadastrado.</td></tr>';
@@ -224,6 +214,12 @@ export class ClientesPage {
         ? '<span class="badge text-bg-warning">sem distância</span>'
         : `${quilometros.format(c.distancia_km)} km`;
 
+    // Excluir: só aparece para o ADMIN (tabela de permissões do README)
+    const botaoExcluir =
+      this.perfil === 'ADMIN'
+        ? `<button type="button" class="btn btn-sm btn-outline-danger" data-acao="excluir" data-id="${c.id}">Excluir</button>`
+        : '';
+
     return `
       <tr>
         <td>${escapar(c.nome)}</td>
@@ -233,7 +229,7 @@ export class ClientesPage {
         <td class="text-end text-nowrap">${distancia}</td>
         <td class="text-end text-nowrap">
           <button type="button" class="btn btn-sm btn-outline-primary" data-acao="editar" data-id="${c.id}">Editar</button>
-          <button type="button" class="btn btn-sm btn-outline-danger" data-acao="excluir" data-id="${c.id}">Excluir</button>
+          ${botaoExcluir}
         </td>
       </tr>`;
   }
@@ -252,10 +248,15 @@ export class ClientesPage {
       );
       if (!certeza) return;
 
-      // TROCAR NO PASSO 5: window.api.chamar<void>('clientes:excluir', id),
-      // mostrar resposta.erro se der errado (ex.: "Cliente tem pedidos e
-      // não pode ser excluído.") e recarregar a lista se der certo.
-      this.alerta('warning', 'Tela provisória: a exclusão ainda não está ligada ao banco.');
+      const resposta = await window.api.chamar<void>('clientes:excluir', id);
+      if (!resposta.ok) {
+        // Ex.: "Este registro está em uso e não pode ser excluído."
+        this.alerta('danger', resposta.erro);
+        return;
+      }
+      if (this.idEmEdicao === id) this.fecharFormulario();
+      await this.carregar();
+      this.alerta('success', `Cliente "${cliente.nome}" excluído.`);
     }
   }
 
@@ -290,19 +291,81 @@ export class ClientesPage {
     this.el('clientes-form-card').classList.add('d-none');
   }
 
-  /** Botão "Buscar CEP". */
-  private buscarCep(): void {
-    // TROCAR NO PASSO 5: window.api.chamar('clientes:buscarCep', cep) e
-    // preencher rua, bairro, cidade e UF com a resposta do ViaCEP.
-    this.alerta('info', 'Tela provisória: a busca pelo CEP ainda não está ligada ao sistema.');
+  /** Botão "Buscar CEP": pede o endereço ao Main e preenche os campos. */
+  private async buscarCep(): Promise<void> {
+    const botao = this.el('clientes-buscar-cep') as HTMLButtonElement;
+    botao.disabled = true; // evita clicar duas vezes enquanto espera
+    botao.textContent = 'Buscando...';
+    const resposta = await window.api.chamar<EnderecoDoCep>(
+      'clientes:buscarCep',
+      this.input('clientes-cep').value,
+    );
+    botao.disabled = false;
+    botao.textContent = 'Buscar CEP';
+
+    if (!resposta.ok) {
+      // Ex.: "CEP não encontrado." ou "CEP inválido. Ele deve ter 8 números."
+      this.alerta('danger', resposta.erro);
+      return;
+    }
+
+    const endereco = resposta.dados;
+    this.input('clientes-cep').value = this.formatarCep(endereco.cep);
+    this.input('clientes-logradouro').value = endereco.logradouro;
+    this.input('clientes-bairro').value = endereco.bairro;
+    this.input('clientes-cidade').value = endereco.cidade;
+    this.input('clientes-uf').value = endereco.uf;
+
+    // Cidade com CEP único: o ViaCEP não sabe a rua nem o bairro
+    if (endereco.logradouro === '') {
+      this.alerta('info', 'Este CEP é da cidade inteira: preencha a rua e o bairro.');
+      this.input('clientes-logradouro').focus();
+      return;
+    }
+    this.alerta('info', 'Endereço preenchido pelo CEP. Confira e digite o número.');
+    this.input('clientes-numero').focus();
   }
 
   /** Botão "Salvar". Sem id = cadastrar; com id = editar. */
-  private salvar(): void {
-    // TROCAR NO PASSO 5: montar o objeto com os campos do formulário
-    // (com o id quando estiver editando) e enviar com
-    // window.api.chamar<number>('clientes:salvar', dados).
-    this.alerta('warning', 'Tela provisória: o cadastro ainda não é salvo no banco.');
+  private async salvar(): Promise<void> {
+    // A distância NÃO vai: quem calcula é o Main.
+    const dados = {
+      ...(this.idEmEdicao === null ? {} : { id: this.idEmEdicao }),
+      nome: this.input('clientes-nome').value,
+      telefone: this.input('clientes-telefone').value,
+      cep: this.input('clientes-cep').value,
+      logradouro: this.input('clientes-logradouro').value,
+      numero: this.input('clientes-numero').value,
+      complemento: this.input('clientes-complemento').value,
+      bairro: this.input('clientes-bairro').value,
+      cidade: this.input('clientes-cidade').value,
+      uf: this.input('clientes-uf').value,
+    };
+
+    // Desliga o botão enquanto espera: evita salvar duas vezes. Pode
+    // levar alguns segundos, porque o Main consulta o mapa.
+    const botao = this.el('clientes-salvar') as HTMLButtonElement;
+    botao.disabled = true;
+    botao.textContent = 'Salvando...';
+    const resposta = await window.api.chamar<ClienteSalvo>('clientes:salvar', dados);
+    botao.disabled = false;
+    botao.textContent = 'Salvar';
+
+    if (!resposta.ok) {
+      // Ex.: "O campo Nome é obrigatório." (o formulário continua aberto)
+      this.alerta('danger', resposta.erro);
+      return;
+    }
+
+    const editou = this.idEmEdicao !== null;
+    this.fecharFormulario();
+    await this.carregar();
+    if (resposta.dados.aviso !== null) {
+      // Salvou, mas sem distância: aviso amarelo com o motivo
+      this.alerta('warning', resposta.dados.aviso);
+    } else {
+      this.alerta('success', editou ? 'Cliente atualizado.' : 'Cliente cadastrado.');
+    }
   }
 
   // -------------------------------------------------------------------

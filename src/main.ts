@@ -20,6 +20,7 @@ import { ehEnderecoDoSistema } from './main/security/origem';
 import { registrarAuthIpc } from './main/ipc/authIpc';
 import { registrarUsuariosIpc } from './main/ipc/usuariosIpc';
 // --- Integrante 2 ----------------------------------------------------
+import { registrarClientesIpc } from './main/ipc/clientesIpc';
 // --- Integrante 3 ----------------------------------------------------
 import { registrarCatalogoIpc } from './main/ipc/catalogoIpc';
 import { registrarFornecedoresIpc } from './main/ipc/fornecedoresIpc';
@@ -40,6 +41,7 @@ function registrarTodosOsCanais(): void {
   registrarAuthIpc(router);
   registrarUsuariosIpc(router);
   // --- Integrante 2 --------------------------------------------------
+  registrarClientesIpc(router);
   // --- Integrante 3 --------------------------------------------------
   registrarCatalogoIpc(router);
   registrarFornecedoresIpc(router);
