@@ -1,58 +1,104 @@
-import { app, BrowserWindow } from 'electron';
+// =====================================================================
+// main.ts — o "GERENTE" do programa (processo Main)
+// ---------------------------------------------------------------------
+// É o primeiro arquivo que roda. Ele:
+//   1. liga todos os canais IPC (cada módulo tem sua linha aqui);
+//   2. cria a janela do sistema, com as travas de segurança;
+//   3. fecha o programa quando a janela é fechada.
+//
+// ARQUIVO COMPARTILHADO: cada integrante só ACRESCENTA as linhas da
+// sua parte, na sua seção (import lá em cima, registrar lá embaixo).
+// =====================================================================
+
+import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import { IpcRouter } from './main/ipc/IpcRouter';
+import { ehEnderecoDoSistema } from './main/security/origem';
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+// --- Integrante 1 ----------------------------------------------------
+import { registrarUsuariosIpc } from './main/ipc/usuariosIpc';
+// --- Integrante 2 ----------------------------------------------------
+// --- Integrante 3 ----------------------------------------------------
+// --- Integrante 4 ----------------------------------------------------
+
+// Instalador do Windows: ao instalar/desinstalar, só cria os atalhos e sai.
 if (started) {
   app.quit();
 }
 
-const createWindow = () => {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+/** Liga TODOS os canais do sistema no garçom (IpcRouter). */
+function registrarTodosOsCanais(): void {
+  const router = new IpcRouter();
+
+  // --- Integrante 1 --------------------------------------------------
+  registrarUsuariosIpc(router);
+  // --- Integrante 2 --------------------------------------------------
+  // --- Integrante 3 --------------------------------------------------
+  // --- Integrante 4 --------------------------------------------------
+}
+
+function criarJanela(): void {
+  const janela = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'Pet Shop DAD',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
+
+      // As 3 travas de segurança da janela (cada uma explicada no README):
+      contextIsolation: true, // a tela e o preload vivem em "mundos" separados
+      nodeIntegration: false, // a tela NÃO tem acesso ao Node (arquivos, banco...)
+      sandbox: true, // a tela roda numa "caixa de areia", como um site
     },
   });
 
-  // and load the index.html of the app.
+  // Trava extra: a janela nunca sai do nosso sistema. Um link para
+  // fora abre no navegador do computador, e não dentro do programa.
+  janela.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://')) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+  // Navegar para um endereço de fora: bloqueado. Recarregar a NOSSA
+  // página é permitido (o Vite recarrega sozinho ao salvar um arquivo).
+  janela.webContents.on('will-navigate', (evento) => {
+    if (!ehEnderecoDoSistema(evento.url)) {
+      evento.preventDefault();
+    }
+  });
+
+  // Carrega a tela: no npm start vem do servidor do Vite; no programa
+  // instalado, do arquivo index.html empacotado.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    void janela.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    janela.webContents.openDevTools(); // DevTools só durante o desenvolvimento
   } else {
-    mainWindow.loadFile(
+    void janela.loadFile(
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
   }
+}
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
-};
+// Quando o Electron termina de iniciar: liga os canais e abre a janela.
+void app.whenReady().then(() => {
+  registrarTodosOsCanais();
+  criarJanela();
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  createWindow();
-
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+  // macOS: clicar no ícone reabre a janela se nenhuma estiver aberta.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      criarJanela();
     }
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// Fechou a janela: fecha o programa (menos no macOS, que é o costume de lá).
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.

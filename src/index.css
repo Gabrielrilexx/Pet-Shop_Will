@@ -1,8 +1,10 @@
+/* Estilos próprios do sistema. O visual principal vem do Bootstrap. */
+
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  margin: auto;
-  max-width: 38rem;
-  padding: 2rem;
+  background-color: #f6f7f9;
+}
+
+/* Item do menu da página aberta */
+.navbar .nav-link.active {
+  font-weight: 600;
 }

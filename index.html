@@ -1,12 +1,39 @@
 <!doctype html>
-<html>
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <title>Hello World!</title>
+    <!--
+      Content-Security-Policy (CSP): a "lista de convidados" da tela.
+      Diz de ONDE a página pode carregar cada coisa. Tudo fora da lista
+      é bloqueado pelo navegador, inclusive código injetado por um ataque.
+        default-src 'self'  -> por padrão, só arquivos do próprio sistema
+        script-src 'self'   -> JavaScript só dos nossos arquivos (nada de
+                               <script> escrito no meio do HTML, nem onclick="")
+        style-src ... 'unsafe-inline' -> estilos; o 'unsafe-inline' é
+                               necessário porque o Vite injeta o CSS assim
+        img-src / font-src ... data: -> ícones embutidos do Bootstrap
+        object-src 'none'   -> nada de plugins (Flash, applets...)
+        base-uri / form-action 'none' -> ninguém troca o endereço base nem
+                               envia formulário para fora
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Pet Shop DAD</title>
   </head>
   <body>
-    <h1>💖 Hello World!</h1>
-    <p>Welcome to your Electron application.</p>
+    <!-- Menu principal: os itens são criados pelo renderer.ts a partir do rotas.ts -->
+    <nav class="navbar navbar-expand bg-primary" data-bs-theme="dark">
+      <div class="container-fluid">
+        <span class="navbar-brand">🐾 Pet Shop</span>
+        <ul class="navbar-nav me-auto" id="menu"></ul>
+      </div>
+    </nav>
+
+    <!-- Cada página (XxxPage) desenha o seu conteúdo aqui dentro -->
+    <main id="app" class="container py-4"></main>
+
     <script type="module" src="/src/renderer.ts"></script>
   </body>
 </html>
