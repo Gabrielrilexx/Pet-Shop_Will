@@ -250,7 +250,7 @@ export class ClientesPage {
 
       const resposta = await window.api.chamar<void>('clientes:excluir', id);
       if (!resposta.ok) {
-        // Ex.: "Este registro está em uso e não pode ser excluído."
+        // Ex.: "Cliente tem pedidos e não pode ser excluído."
         this.alerta('danger', resposta.erro);
         return;
       }

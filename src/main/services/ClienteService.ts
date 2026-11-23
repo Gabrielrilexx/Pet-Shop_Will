@@ -9,7 +9,8 @@
 //     OSRM) quando ela é nova, quando o endereço muda ou quando ela
 //     ainda está vazia (decisão do grupo: dúvida 5, opção a);
 //   - se a API de mapas falhar: salvar SEM distância (NULL) e avisar.
-//     Nunca um número inventado: distância errada = taxa errada.
+//     Nunca um número inventado: distância errada = taxa errada;
+//   - não deixar excluir cliente que já tem pedidos (dúvida 1, opção c).
 //
 // SEGURANÇA: latitude, longitude e distancia_km NUNCA vêm da tela. Se
 // alguém mandar uma distância pelo DevTools, ela é ignorada: o valor é
@@ -132,11 +133,15 @@ export class ClienteService {
   }
 
   /**
-   * Exclui um cliente. Se ele tiver pedidos, o banco recusa (RESTRICT)
-   * e o BaseRepository avisa "Este registro está em uso...".
+   * Exclui um cliente. Antes, pergunta ao banco se ele tem pedidos
+   * (dúvida 1, opção c). O RESTRICT do banco continua como 2ª trava.
    */
   async excluir(id: number): Promise<void> {
-    await this.clientes.excluir(ClienteService.validarId(id));
+    const idValido = ClienteService.validarId(id);
+    if (await this.clientes.possuiPedidos(idValido)) {
+      throw new ErroDeNegocio('Cliente tem pedidos e não pode ser excluído.');
+    }
+    await this.clientes.excluir(idValido);
   }
 
   // -------------------------------------------------------------------

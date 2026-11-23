@@ -6,10 +6,10 @@
 // "cliente". O Service (o chef) pede, o Repository busca e guarda.
 //
 // Herda do BaseRepository (Integrante 1): listar(), buscarPorId() e
-// excluir() já vêm prontos. Aqui ficam só inserir() e atualizar().
-// O excluir() herdado já protege o histórico: se o cliente tiver
-// pedidos, o banco recusa (RESTRICT) e o BaseRepository avisa
-// "Este registro está em uso e não pode ser excluído.".
+// excluir() já vêm prontos. Aqui ficam só o que é próprio do cliente:
+//   - inserir() e atualizar();
+//   - possuiPedidos(): pergunta ao banco se o cliente já tem pedidos,
+//     ANTES de tentar excluir (decisão do grupo: dúvida 1, opção c).
 //
 // O cliente NÃO tem coluna UNIQUE (dois clientes podem ter o mesmo
 // nome), então não há "Já existe um cliente com...".
@@ -51,6 +51,19 @@ export class ClienteRepository extends BaseRepository<Cliente> {
     if (resultado.affectedRows === 0) {
       throw new ErroDeNegocio('Registro não encontrado.');
     }
+  }
+
+  /**
+   * O cliente já fez algum pedido?
+   * Só LÊ a tabela pedido (do Integrante 4), nunca altera nada nela.
+   * COUNT(*) conta quantas linhas existem; "AS total" dá um nome à conta.
+   */
+  async possuiPedidos(id: number): Promise<boolean> {
+    const linhas = await this.db.consultar<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM pedido WHERE cliente_id = ?',
+      [id],
+    );
+    return Number(linhas[0]?.total ?? 0) > 0;
   }
 
   /** Os 12 valores na MESMA ordem das colunas do INSERT e do UPDATE. */
