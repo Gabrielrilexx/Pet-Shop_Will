@@ -17,6 +17,7 @@ import { IpcRouter } from './main/ipc/IpcRouter';
 import { ehEnderecoDoSistema } from './main/security/origem';
 
 // --- Integrante 1 ----------------------------------------------------
+import { registrarAuthIpc } from './main/ipc/authIpc';
 import { registrarUsuariosIpc } from './main/ipc/usuariosIpc';
 // --- Integrante 2 ----------------------------------------------------
 // --- Integrante 3 ----------------------------------------------------
@@ -32,6 +33,7 @@ function registrarTodosOsCanais(): void {
   const router = new IpcRouter();
 
   // --- Integrante 1 --------------------------------------------------
+  registrarAuthIpc(router);
   registrarUsuariosIpc(router);
   // --- Integrante 2 --------------------------------------------------
   // --- Integrante 3 --------------------------------------------------

@@ -23,11 +23,16 @@
     <title>Pet Shop DAD</title>
   </head>
   <body>
-    <!-- Menu principal: os itens são criados pelo renderer.ts a partir do rotas.ts -->
-    <nav class="navbar navbar-expand bg-primary" data-bs-theme="dark">
+    <!--
+      Menu principal: começa ESCONDIDO (d-none) e só aparece depois do login.
+      Os itens são criados pelo renderer.ts a partir do rotas.ts.
+    -->
+    <nav id="barra" class="navbar navbar-expand bg-primary d-none" data-bs-theme="dark">
       <div class="container-fluid">
         <span class="navbar-brand">🐾 Pet Shop</span>
         <ul class="navbar-nav me-auto" id="menu"></ul>
+        <span class="navbar-text me-3" id="usuario-logado"></span>
+        <button type="button" id="botao-sair" class="btn btn-outline-light btn-sm">Sair</button>
       </div>
     </nav>
 

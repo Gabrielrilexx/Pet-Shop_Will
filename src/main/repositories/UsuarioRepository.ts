@@ -19,6 +19,15 @@ export class UsuarioRepository extends BaseRepository<Usuario> {
     super(Database.instancia(), 'usuario'); // nome da tabela FIXO
   }
 
+  /** Busca pelo e-mail (usado no login). Devolve null se não existir. */
+  async buscarPorEmail(email: string): Promise<Usuario | null> {
+    const linhas = await this.db.consultar<Usuario>(
+      'SELECT * FROM usuario WHERE email = ?',
+      [email],
+    );
+    return linhas[0] ?? null;
+  }
+
   /** Insere um usuário e devolve o id. O criado_em o banco preenche. */
   async inserir(dados: Omit<Usuario, 'id'>): Promise<number> {
     try {

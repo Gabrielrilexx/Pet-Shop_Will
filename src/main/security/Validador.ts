@@ -102,6 +102,25 @@ export class Validador {
     return cnpj;
   }
 
+  /**
+   * Senha nova (cadastro, seed e redefinição): mínimo de 8 caracteres,
+   * com pelo menos uma letra e um número. Devolve a senha SEM mexer nos
+   * espaços (espaço também é caractere de senha).
+   * Máximo de 72 bytes porque o bcrypt ignora o que passa disso.
+   */
+  static senha(v: unknown): string {
+    const senha = String(v ?? '');
+    if (senha.length < 8 || !/[A-Za-z]/.test(senha) || !/\d/.test(senha)) {
+      throw new ErroDeNegocio(
+        'A senha deve ter pelo menos 8 caracteres, com letras e números.',
+      );
+    }
+    if (new TextEncoder().encode(senha).length > 72) {
+      throw new ErroDeNegocio('A senha é longa demais (máximo de 72 caracteres).');
+    }
+    return senha;
+  }
+
   /** Número maior que zero (ex.: quantidade, preço). Devolve como number. */
   static positivo(n: unknown, campo: string): number {
     const numero = Validador.paraNumero(n, campo);
