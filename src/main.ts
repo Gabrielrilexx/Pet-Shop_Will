@@ -21,6 +21,7 @@ import { registrarAuthIpc } from './main/ipc/authIpc';
 import { registrarUsuariosIpc } from './main/ipc/usuariosIpc';
 // --- Integrante 2 ----------------------------------------------------
 import { registrarClientesIpc } from './main/ipc/clientesIpc';
+import { registrarEntregadoresIpc } from './main/ipc/entregadoresIpc';
 // --- Integrante 3 ----------------------------------------------------
 import { registrarCatalogoIpc } from './main/ipc/catalogoIpc';
 import { registrarFornecedoresIpc } from './main/ipc/fornecedoresIpc';
@@ -42,6 +43,7 @@ function registrarTodosOsCanais(): void {
   registrarUsuariosIpc(router);
   // --- Integrante 2 --------------------------------------------------
   registrarClientesIpc(router);
+  registrarEntregadoresIpc(router);
   // --- Integrante 3 --------------------------------------------------
   registrarCatalogoIpc(router);
   registrarFornecedoresIpc(router);

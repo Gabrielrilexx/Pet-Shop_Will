@@ -29,6 +29,9 @@ export const CANAIS_PERMITIDOS: readonly string[] = [
   'clientes:salvar',
   'clientes:excluir',
   'clientes:buscarCep',
+  'entregadores:listar',
+  'entregadores:salvar',
+  'entregadores:excluir',
 
   // --- Integrante 3: espécies, categorias, fornecedores, produtos e início
   'especies:listar',
