@@ -56,6 +56,10 @@ export const CANAIS_PERMITIDOS: readonly string[] = [
   'pedidos:confirmar',
   'pedidos:cancelar',
   'pedidos:excluir',
+  'entregas:listarEmRota',
+  'entregas:sair',
+  'entregas:entregue',
+  'entregas:naoEntregue',
 ]; 
 
 

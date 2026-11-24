@@ -12,12 +12,8 @@
 //
 // Tudo passa pelo window.api.chamar(...) (o "balcão" do preload):
 //   pedidos:listar / salvar / confirmar / cancelar / excluir  (meus)
-//   produtos:listar  (Integrante 3)   auth:atual  (Integrante 1)
-//
-// PROVISÓRIO: a lista de CLIENTES ainda é fixa (os 4 clientes do
-// database/exemplo.sql, com os ids conferidos no banco), porque o canal
-// clientes:listar do Integrante 2 ainda não existe. Quando existir,
-// troque o trecho marcado com "TROCAR QUANDO EXISTIR clientes:listar".
+//   clientes:listar  (Integrante 2)   produtos:listar  (Integrante 3)
+//   auth:atual  (Integrante 1)
 //
 // Regras de segurança desta tela (README, Passo 6):
 //   - nada de onclick="..." no HTML: os botões são ligados pelo código;
@@ -38,7 +34,7 @@ import type { TipoAlerta } from '../ui';
 // A tela não precisa do custo nem da margem do produto: o ATENDENTE
 // nem recebe esses campos (o Main corta antes de mandar).
 // ---------------------------------------------------------------------
-type ClienteNaTela = Pick<Cliente, 'id' | 'nome'>;
+type ClienteNaTela = Pick<Cliente, 'id' | 'nome' | 'distancia_km'>;
 type ProdutoNaTela = Pick<Produto, 'id' | 'nome' | 'preco_venda' | 'quantidade_estoque'>;
 /** Um pedido como o pedidos:listar devolve: com o nome do cliente junto. */
 type PedidoNaLista = Pedido & { cliente_nome: string };
@@ -50,18 +46,6 @@ interface ItemNaTela {
     quantidade: number;
     preco_unitario: number;
 }
-
-// =====================================================================
-// TROCAR QUANDO EXISTIR clientes:listar (Integrante 2)
-// Os 4 clientes do exemplo.sql, com os ids conferidos no banco
-// (SELECT id, nome FROM cliente) em 23/11/2026.
-// =====================================================================
-const CLIENTES_PROVISORIOS: ClienteNaTela[] = [
-    { id: 1, nome: 'Ana Souza' },
-    { id: 2, nome: 'Bruno Lima' },
-    { id: 3, nome: 'Carla Mendes' },
-    { id: 4, nome: 'Diego Rocha' },
-];
 
 /** Como cada status aparece na tela (texto e cor do Bootstrap). */
 const STATUS: Record<StatusPedido, { rotulo: string; cor: string }> = {
@@ -96,12 +80,7 @@ export class PedidosPage {
         const atual = await window.api.chamar<UsuarioSemSenha>('auth:atual');
         if (atual.ok) this.perfil = atual.dados.perfil;
 
-        // TROCAR QUANDO EXISTIR clientes:listar:
-        //   const r = await window.api.chamar<Cliente[]>('clientes:listar');
-        this.clientes = CLIENTES_PROVISORIOS;
-        this.desenharOpcoesDeClientes();
-
-        await Promise.all([this.carregarProdutos(), this.carregarPedidos()]);
+        await Promise.all([this.carregarClientes(), this.carregarProdutos(), this.carregarPedidos()]);
     }
 
     // ===================================================================
@@ -128,7 +107,6 @@ export class PedidosPage {
           <div class="mb-3">
             <label for="pedidos-cliente" class="form-label">Cliente</label>
             <select id="pedidos-cliente" class="form-select"></select>
-            <div class="form-text">Provisório: os clientes do exemplo, até existir o cadastro de clientes.</div>
           </div>
 
           <div class="row g-2 align-items-end mb-3">
@@ -234,6 +212,17 @@ export class PedidosPage {
         this.desenharLista();
     }
 
+    /** Clientes do cadastro do Integrante 2 (canal clientes:listar). */
+    private async carregarClientes(): Promise<void> {
+        const resposta = await window.api.chamar<ClienteNaTela[]>('clientes:listar');
+        if (!resposta.ok) {
+            this.alerta('danger', resposta.erro);
+            return;
+        }
+        this.clientes = resposta.dados;
+        this.desenharOpcoesDeClientes();
+    }
+
     private async carregarProdutos(): Promise<void> {
         const resposta = await window.api.chamar<ProdutoNaTela[]>('produtos:listar');
         if (!resposta.ok) {
@@ -330,9 +319,17 @@ export class PedidosPage {
     // 5. O FORMULÁRIO DE NOVO PEDIDO
     // ===================================================================
 
+    /**
+     * Cliente sem distância calculada aparece com um aviso: o pedido dele
+     * pode ser feito, mas só sai para entrega depois de alguém editar o
+     * endereço na tela de Clientes (que recalcula a distância).
+     */
     private desenharOpcoesDeClientes(): void {
         const opcoes = this.clientes
-            .map((c) => `<option value="${c.id}">${escapar(c.nome)}</option>`)
+            .map((c) => {
+                const aviso = c.distancia_km === null ? ' (sem distância: confira o endereço)' : '';
+                return `<option value="${c.id}">${escapar(c.nome + aviso)}</option>`;
+            })
             .join('');
         this.el('pedidos-cliente').innerHTML = `<option value="">Escolha o cliente...</option>${opcoes}`;
     }

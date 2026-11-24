@@ -29,7 +29,7 @@ import { registrarProdutosIpc } from './main/ipc/produtosIpc';
 import { registrarInicioIpc } from './main/ipc/inicioIpc';
 // --- Integrante 4 ----------------------------------------------------
 import { registrarPedidosIpc } from './main/ipc/pedidosIpc';
-
+import { registrarEntregasIpc } from './main/ipc/entregasIpc';
 // Instalador do Windows: ao instalar/desinstalar, só cria os atalhos e sai.
 if (started) {
   app.quit();
@@ -52,6 +52,7 @@ function registrarTodosOsCanais(): void {
   registrarInicioIpc(router);
   // --- Integrante 4 --------------------------------------------------
   registrarPedidosIpc(router);
+  registrarEntregasIpc(router);
 }
 
 function criarJanela(): void {

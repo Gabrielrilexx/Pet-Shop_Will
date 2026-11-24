@@ -224,6 +224,19 @@ export class PedidoRepository extends BaseRepository<Pedido> {
         return (resultado as ResultadoExecucao).affectedRows === 1;
     }
 
+    /**
+     * Grava a taxa de entrega e RECALCULA o total, na transação da saída
+     * (ou da volta, com taxa 0). A conta "subtotal + taxa" é feita pelo
+     * próprio banco, no mesmo comando: ninguém precisa ler o subtotal
+     * antes (a mesma ideia da baixa de estoque do Integrante 3).
+     */
+    async atualizarTaxa(con: PoolConnection, id: number, taxa: number): Promise<void> {
+        await con.execute(
+            'UPDATE pedido SET taxa_entrega = ?, total = subtotal + ? WHERE id = ?',
+            [taxa, taxa, id],
+        );
+    }
+
     // -------------------------------------------------------------------
     // Contrato com o Integrante 3 (tela inicial)
     // -------------------------------------------------------------------

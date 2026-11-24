@@ -37,6 +37,9 @@ import type { Entrega } from '../../shared/tipos';
  */
 export type EntregaNova = Omit<Entrega, 'id' | 'status' | 'saiu_em' | 'entregue_em'>;
 
+/** Uma entrega do jeito que a tela de Entregas mostra: com os nomes juntos. */
+export type EntregaNaRua = Entrega & { cliente_nome: string; entregador_nome: string };
+
 // Toda entrega nasce assim: EM_ROTA e com o horário de agora.
 // 'EM_ROTA' e NOW() estão escritos no próprio SQL (não são "?"):
 // não vêm de fora, então não há risco de SQL injection.
@@ -151,6 +154,23 @@ export class EntregaRepository extends BaseRepository<Entrega> {
     async listarEmRota(): Promise<Entrega[]> {
         return this.db.consultar<Entrega>(
             "SELECT * FROM entrega WHERE status = 'EM_ROTA' ORDER BY saiu_em, id",
+        );
+    }
+
+    /**
+     * As entregas na rua agora, já com o NOME do cliente e do motoboy.
+     * Dois JOINs: entrega -> pedido -> cliente, e entrega -> entregador
+     * (como grampear na ficha de saída a comanda e o crachá do motoboy).
+     */
+    async listarEmRotaComNomes(): Promise<EntregaNaRua[]> {
+        return this.db.consultar<EntregaNaRua>(
+            'SELECT e.*, c.nome AS cliente_nome, en.nome AS entregador_nome ' +
+            'FROM entrega e ' +
+            'JOIN pedido p ON p.id = e.pedido_id ' +
+            'JOIN cliente c ON c.id = p.cliente_id ' +
+            'JOIN entregador en ON en.id = e.entregador_id ' +
+            "WHERE e.status = 'EM_ROTA' " +
+            'ORDER BY e.saiu_em, e.id',
         );
     }
 
