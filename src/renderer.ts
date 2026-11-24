@@ -34,11 +34,19 @@ const botaoSair = document.getElementById('botao-sair') as HTMLButtonElement;
 // (Quem garante a segurança de verdade é o IpcRouter, no Main.)
 let usuarioAtual: UsuarioSemSenha | null = null;
 
-/** As rotas que o perfil de quem está logado pode ver. */
+// A "página inicial" do sistema: aparece primeiro no menu e abre
+// sozinha depois do login (tela do Integrante 3).
+const PAGINA_INICIAL = 'inicio';
+
+/** As rotas que o perfil de quem está logado pode ver (a inicial primeiro). */
 function rotasPermitidas(): Rota[] {
   if (usuarioAtual === null) return [];
   const perfil = usuarioAtual.perfil;
-  return ROTAS.filter((rota) => rota.perfis.includes(perfil));
+  const permitidas = ROTAS.filter((rota) => rota.perfis.includes(perfil));
+  return [
+    ...permitidas.filter((rota) => rota.id === PAGINA_INICIAL),
+    ...permitidas.filter((rota) => rota.id !== PAGINA_INICIAL),
+  ];
 }
 
 /** Cria um item de menu para cada rota permitida. */
@@ -89,8 +97,9 @@ async function abrir(id: string): Promise<void> {
     return;
   }
 
-  marcarAtivo(id);
-  const rota = rotasPermitidas().find((r) => r.id === id);
+  const alvo = id || PAGINA_INICIAL; // sem # no endereço: abre a página inicial
+  marcarAtivo(alvo);
+  const rota = rotasPermitidas().find((r) => r.id === alvo);
   if (!rota) {
     telaDeBoasVindas();
     return;
@@ -101,7 +110,7 @@ async function abrir(id: string): Promise<void> {
     await rota.criar().render(app);
   } catch (erro) {
     // Se a página quebrar, o sistema não fica em branco: mostra um aviso.
-    console.error(`[renderer] Erro ao abrir a página "${id}":`, erro);
+    console.error(`[renderer] Erro ao abrir a página "${alvo}":`, erro);
     mostrarAlerta(app, 'danger', 'Não foi possível abrir esta tela.');
   }
 }

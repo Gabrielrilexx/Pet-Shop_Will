@@ -27,12 +27,15 @@
       Menu principal: começa ESCONDIDO (d-none) e só aparece depois do login.
       Os itens são criados pelo renderer.ts a partir do rotas.ts.
     -->
+    <!-- flex-wrap: se a janela ficar estreita, os itens descem para a linha de baixo -->
     <nav id="barra" class="navbar navbar-expand bg-primary d-none" data-bs-theme="dark">
-      <div class="container-fluid">
+      <div class="container-fluid flex-wrap">
         <span class="navbar-brand">🐾 Pet Shop</span>
-        <ul class="navbar-nav me-auto" id="menu"></ul>
-        <span class="navbar-text me-3" id="usuario-logado"></span>
-        <button type="button" id="botao-sair" class="btn btn-outline-light btn-sm">Sair</button>
+        <ul class="navbar-nav me-auto flex-wrap" id="menu"></ul>
+        <div class="d-flex align-items-center">
+          <span class="navbar-text me-3 text-nowrap" id="usuario-logado"></span>
+          <button type="button" id="botao-sair" class="btn btn-outline-light btn-sm">Sair</button>
+        </div>
       </div>
     </nav>
 
