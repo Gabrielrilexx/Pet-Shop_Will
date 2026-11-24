@@ -12,6 +12,7 @@
 //
 // Tudo passa pelo window.api.chamar(...) (o "balcão" do preload):
 //   pedidos:listar / salvar / confirmar / cancelar / excluir  (meus)
+//   entregas:historico  (meu, Passo 7: as tentativas de entrega)
 //   clientes:listar  (Integrante 2)   produtos:listar  (Integrante 3)
 //   auth:atual  (Integrante 1)
 //
@@ -25,7 +26,7 @@
 // Autor: Integrante 4 (pedidos e entregas)
 // =====================================================================
 
-import type { Cliente, Pedido, Perfil, Produto, StatusPedido, UsuarioSemSenha } from '../../shared/tipos';
+import type { Cliente, Entrega, Pedido, Perfil, Produto, StatusPedido, UsuarioSemSenha } from '../../shared/tipos';
 import { confirmar, escapar, mostrarAlerta } from '../ui';
 import type { TipoAlerta } from '../ui';
 
@@ -38,6 +39,8 @@ type ClienteNaTela = Pick<Cliente, 'id' | 'nome' | 'distancia_km'>;
 type ProdutoNaTela = Pick<Produto, 'id' | 'nome' | 'preco_venda' | 'quantidade_estoque'>;
 /** Um pedido como o pedidos:listar devolve: com o nome do cliente junto. */
 type PedidoNaLista = Pedido & { cliente_nome: string };
+/** Uma tentativa de entrega como o entregas:historico devolve. */
+type TentativaNaTela = Entrega & { entregador_nome: string };
 
 /** Uma linha do formulário de novo pedido (nome e preço são só para mostrar). */
 interface ItemNaTela {
@@ -148,6 +151,23 @@ export class PedidosPage {
         </div>
       </div>
 
+      <!-- ============ HISTÓRICO DE ENTREGAS (aparece ao clicar em "Histórico") ============ -->
+      <div id="pedidos-historico" class="card border-info mb-4 d-none">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span id="pedidos-historico-titulo" class="fw-semibold"></span>
+          <button type="button" id="pedidos-historico-fechar" class="btn btn-sm btn-outline-secondary">Fechar</button>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr><th>Tentativa</th><th>Motoboy</th><th>Saiu em</th><th>Resultado</th>
+                  <th class="text-end">Distância</th><th class="text-end">Taxa</th></tr>
+            </thead>
+            <tbody id="pedidos-historico-lista"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- ============ LISTA DE PEDIDOS ============ -->
       <div class="d-flex align-items-center gap-2 mb-2">
         <label for="pedidos-filtro" class="form-label mb-0">Status:</label>
@@ -176,6 +196,9 @@ export class PedidosPage {
         this.el('pedidos-filtro').addEventListener('change', () => this.desenharLista());
         this.el('pedidos-novo').addEventListener('click', () => this.abrirFormulario());
         this.el('pedidos-cancelar-form').addEventListener('click', () => this.fecharFormulario());
+        this.el('pedidos-historico-fechar').addEventListener('click', () =>
+            this.el('pedidos-historico').classList.add('d-none'),
+        );
         this.el('pedidos-adicionar').addEventListener('click', () => this.adicionarItem());
         this.el('pedidos-salvar').addEventListener('click', () => void this.salvar());
 
@@ -263,6 +286,10 @@ export class PedidosPage {
         if (this.perfil === 'ADMIN' && (p.status === 'ABERTO' || p.status === 'CANCELADO')) {
             botoes.push(this.botao('excluir', p.id, 'Excluir', 'danger'));
         }
+        // Pedido ABERTO nunca saiu para entrega: não tem histórico para mostrar.
+        if (p.status !== 'ABERTO') {
+            botoes.push(this.botao('historico', p.id, 'Histórico', 'info'));
+        }
 
         return `
       <tr>
@@ -299,6 +326,59 @@ export class PedidosPage {
                 await this.enviar('pedidos:excluir', id, `O ${quem} foi excluído.`);
             }
         }
+        if (acao === 'historico') {
+            await this.mostrarHistorico(pedido);
+        }
+    }
+
+    // ===================================================================
+    // HISTÓRICO DE ENTREGAS (Passo 7)
+    // ===================================================================
+
+    /**
+     * Mostra todas as tentativas de entrega do pedido, da primeira para a
+     * última: quem levou, quando saiu e como terminou (entregue com o
+     * horário, ou não entregue com o motivo). É a regra da arquitetura:
+     * "as tentativas anteriores ficam no histórico".
+     */
+    private async mostrarHistorico(pedido: PedidoNaLista): Promise<void> {
+        const resposta = await window.api.chamar<TentativaNaTela[]>('entregas:historico', pedido.id);
+        if (!resposta.ok) return this.alerta('danger', resposta.erro);
+
+        // textContent: o nome do cliente nunca vira HTML
+        this.el('pedidos-historico-titulo').textContent =
+            `Entregas do pedido nº ${pedido.id} (${pedido.cliente_nome})`;
+
+        const tentativas = resposta.dados;
+        this.el('pedidos-historico-lista').innerHTML =
+            tentativas.length === 0
+                ? '<tr><td colspan="6" class="text-center text-secondary">Este pedido ainda não saiu para entrega.</td></tr>'
+                : tentativas.map((t, i) => this.linhaDoHistorico(t, i + 1)).join('');
+
+        this.el('pedidos-historico').classList.remove('d-none');
+        this.el('pedidos-historico').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    private linhaDoHistorico(t: TentativaNaTela, numero: number): string {
+        let resultado: string;
+        if (t.status === 'ENTREGUE') {
+            const quando = t.entregue_em ? ` em ${dataHora.format(new Date(t.entregue_em))}` : '';
+            resultado = `<span class="badge text-bg-success">Entregue</span>${quando}`;
+        } else if (t.status === 'NAO_ENTREGUE') {
+            const motivo = t.observacao ? `: ${escapar(t.observacao)}` : '';
+            resultado = `<span class="badge text-bg-warning">Não entregue</span>${motivo}`;
+        } else {
+            resultado = '<span class="badge text-bg-primary">Na rua</span>';
+        }
+        return `
+      <tr>
+        <td>${numero}ª</td>
+        <td>${escapar(t.entregador_nome)}</td>
+        <td>${dataHora.format(new Date(t.saiu_em))}</td>
+        <td>${resultado}</td>
+        <td class="text-end">${t.distancia_km.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} km</td>
+        <td class="text-end">${reais.format(t.valor_entrega)}</td>
+      </tr>`;
     }
 
     /**

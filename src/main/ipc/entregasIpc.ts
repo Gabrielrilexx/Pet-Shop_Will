@@ -14,7 +14,7 @@ import type { IpcRouter } from './IpcRouter';
 import { Database } from '../database/Database';
 import { EntregaService } from '../services/EntregaService';
 import type { NaoEntregaInformada, SaidaParaEntrega } from '../services/EntregaService';
-import type { EntregaNaRua } from '../repositories/EntregaRepository';
+import type { EntregaDoHistorico, EntregaNaRua } from '../repositories/EntregaRepository';
 import { EntregaRepository } from '../repositories/EntregaRepository';
 import { PedidoRepository } from '../repositories/PedidoRepository';
 import { EntregadorRepository } from '../repositories/EntregadorRepository'; // Integrante 2
@@ -42,5 +42,9 @@ export function registrarEntregasIpc(router: IpcRouter): void {
         'entregas:naoEntregue',
         ['ADMIN', 'ATENDENTE'],
         (dados) => service.registrarNaoEntregue(dados),
+    );
+    // Passo 7: o histórico de tentativas de um pedido (o dado é o id do PEDIDO).
+    router.registrar<number, EntregaDoHistorico[]>('entregas:historico', ['ADMIN', 'ATENDENTE'], (id) =>
+        service.historico(id),
     );
 }

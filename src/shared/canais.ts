@@ -60,6 +60,7 @@ export const CANAIS_PERMITIDOS: readonly string[] = [
   'entregas:sair',
   'entregas:entregue',
   'entregas:naoEntregue',
+  'entregas:historico',
 ]; 
 
 

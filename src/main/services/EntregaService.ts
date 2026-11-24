@@ -24,13 +24,18 @@
 //   EntregadorRepository, ClienteRepository -> Integrante 2
 //
 // Canais (entregasIpc.ts): entregas:* -> ADMIN, ATENDENTE.
+// Passo 7: historico() mostra todas as tentativas de um pedido.
 //
 // Autor: Integrante 4 (pedidos e entregas)
 // =====================================================================
 
 import type { Database, PoolConnection } from '../database/Database';
 import type { PedidoRepository } from '../repositories/PedidoRepository';
-import type { EntregaRepository, EntregaNaRua } from '../repositories/EntregaRepository';
+import type {
+    EntregaRepository,
+    EntregaNaRua,
+    EntregaDoHistorico,
+} from '../repositories/EntregaRepository';
 import type { EntregadorRepository } from '../repositories/EntregadorRepository';
 import type { ClienteRepository } from '../repositories/ClienteRepository';
 import { ErroDeNegocio } from '../security/ErroDeNegocio';
@@ -65,6 +70,19 @@ export class EntregaService {
     /** As entregas na rua agora, com os nomes do cliente e do motoboy. */
     async listarEmRota(): Promise<EntregaNaRua[]> {
         return this.entregas.listarEmRotaComNomes();
+    }
+
+    /**
+     * HISTÓRICO (Passo 7): todas as tentativas de entrega de um pedido,
+     * da primeira para a última. "As tentativas anteriores ficam no
+     * histórico" (regra da arquitetura): aqui é onde a tela as enxerga.
+     */
+    async historico(id: unknown): Promise<EntregaDoHistorico[]> {
+        const pedidoId = EntregaService.idInteiro(id, 'Pedido');
+        if (!(await this.pedidos.buscarPorId(pedidoId))) {
+            throw new ErroDeNegocio('Pedido não encontrado.');
+        }
+        return this.entregas.listarHistoricoDoPedido(pedidoId);
     }
 
     // ===================================================================

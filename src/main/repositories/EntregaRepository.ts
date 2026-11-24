@@ -40,6 +40,9 @@ export type EntregaNova = Omit<Entrega, 'id' | 'status' | 'saiu_em' | 'entregue_
 /** Uma entrega do jeito que a tela de Entregas mostra: com os nomes juntos. */
 export type EntregaNaRua = Entrega & { cliente_nome: string; entregador_nome: string };
 
+/** Uma tentativa de entrega do HISTÓRICO de um pedido: com o nome do motoboy. */
+export type EntregaDoHistorico = Entrega & { entregador_nome: string };
+
 // Toda entrega nasce assim: EM_ROTA e com o horário de agora.
 // 'EM_ROTA' e NOW() estão escritos no próprio SQL (não são "?"):
 // não vêm de fora, então não há risco de SQL injection.
@@ -136,6 +139,22 @@ export class EntregaRepository extends BaseRepository<Entrega> {
     async listarPorPedido(pedidoId: number): Promise<Entrega[]> {
         return this.db.consultar<Entrega>(
             'SELECT * FROM entrega WHERE pedido_id = ? ORDER BY saiu_em, id',
+            [pedidoId],
+        );
+    }
+
+    /**
+     * O mesmo histórico, já com o NOME do motoboy de cada tentativa
+     * (JOIN com a tabela entregador). Um motoboy que ficou inativo
+     * continua aparecendo aqui: o histórico nunca some.
+     */
+    async listarHistoricoDoPedido(pedidoId: number): Promise<EntregaDoHistorico[]> {
+        return this.db.consultar<EntregaDoHistorico>(
+            'SELECT e.*, en.nome AS entregador_nome ' +
+            'FROM entrega e ' +
+            'JOIN entregador en ON en.id = e.entregador_id ' +
+            'WHERE e.pedido_id = ? ' +
+            'ORDER BY e.saiu_em, e.id',
             [pedidoId],
         );
     }
