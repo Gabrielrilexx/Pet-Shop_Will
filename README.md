@@ -4,12 +4,12 @@ Sistema desktop para um pet shop que **vende pelo WhatsApp** e **entrega com mot
 
 Projeto final da disciplina **DAD (Desenvolvimento de Aplicações Desktop)**, feito em grupo de 4.
 
-| Integrante | Módulo |
-| --- | --- |
-| Integrante 1 | Base, login e segurança (banco, IPC, janela segura, usuários) |
-| Integrante 2 | Clientes e entregadores (CEP, distância) |
-| Integrante 3 | Catálogo e estoque (espécies, categorias, fornecedores, produtos, tela inicial) |
-| Integrante 4 | Banco, pedidos e entregas |
+| Integrante | Nome | Módulo |
+| --- | --- | --- |
+| 1 | Caio Andrade Campos | Base, login e segurança (banco, IPC, janela segura, usuários) |
+| 2 | João Henrique Allegre | Clientes e entregadores (CEP, distância) |
+| 3 | Gabriel dos Santos | Catálogo e estoque (espécies, categorias, fornecedores, produtos, tela inicial) |
+| 4 | Evaldo José de Souza | Banco, pedidos e entregas |
 
 ---
 
@@ -22,6 +22,7 @@ Projeto final da disciplina **DAD (Desenvolvimento de Aplicações Desktop)**, f
 - **Catálogo:** espécies, categorias e fornecedores (dados da empresa pelo CNPJ).
 - **Produtos:** produtos importados em dólar, com preço de venda sugerido pela cotação do dia.
 - **Pedidos:** o pedido só é confirmado se houver estoque de todos os itens; cancelar devolve o estoque.
+- **Entregas:** o pedido sai com um motoboy ativo e a taxa é calculada sozinha (distância × valor por km). Depois é marcado como entregue ou não entregue, e cada tentativa fica no histórico.
 - **Tela inicial:** pedidos do dia por situação e produtos abaixo do estoque mínimo.
 
 ## Tecnologias
@@ -35,7 +36,7 @@ Electron (Forge 8 + Vite), TypeScript, MySQL (`mysql2`), Bootstrap 5, `bcryptjs`
 | Requisito | Onde está |
 | --- | --- |
 | Banco relacional com no mínimo 6 tabelas ligadas por chave estrangeira | 10 tabelas e 9 chaves estrangeiras em `database/schema.sql` |
-| CRUD completo de todas as entidades | Uma tela por módulo em `src/renderer/pages/`, sempre com listar, criar, editar e excluir |
+| CRUD completo de todas as entidades | Uma tela por módulo em `src/renderer/pages/`, com listar, criar, editar e excluir. Os itens do pedido são criados, editados e removidos dentro do pedido. A entrega não tem editar nem excluir de propósito: é histórico (veja **Pedidos e entregas**) |
 | Consumo de API em 4 situações | ViaCEP, Nominatim + OSRM, AwesomeAPI e BrasilAPI (veja **As 4 APIs**) |
 | Segurança justificada | Veja **Segurança: o que fizemos e por quê** |
 | Lógica organizada em classes (POO) | Repositories, Services e ApiClients com herança (`BaseRepository`, `HttpClient`) |
@@ -114,6 +115,31 @@ Todas gratuitas e sem cartão de crédito. Três atendem pedidos diretos do clie
 - Só **HTTPS**, com **tempo limite de 5 segundos**. Se a API cair, o sistema avisa e deixa preencher à mão: a loja não para porque um site caiu.
 - A resposta é **conferida antes de salvar** (ex.: CEP inexistente). Se a distância não puder ser calculada, o cliente é salvo sem ela, nunca com um número inventado.
 - Cada API tem a **própria classe**: se um dia trocar de API, só aquela classe muda.
+
+---
+
+## Pedidos e entregas
+
+O caminho de um pedido:
+
+```
+ABERTO ──confirmar──▶ CONFIRMADO ──sair──▶ EM_ROTA ──entregue──▶ ENTREGUE
+  │                     │    ▲                │
+  │ cancelar   cancelar │    └─ não entregue ─┘
+  ▼                     ▼
+CANCELADO             CANCELADO
+```
+
+| Regra | Por quê |
+| --- | --- |
+| Confirmar baixa o estoque de **todos** os itens numa transação; se faltar um, nada é baixado | O estoque nunca fica pela metade |
+| O preço de cada item é gravado no pedido, e quem registrou vem do usuário logado | Mudar o preço do produto depois não altera pedidos antigos, e ninguém registra pedido "em nome de outro" |
+| Só sai para entrega um pedido CONFIRMADO, com um entregador **ativo** | Entregador desligado não aparece para novas entregas, mas o histórico dele continua |
+| Taxa = distância do cliente × valor por km do entregador, calculada no Main | A taxa nunca vem da tela. Cliente sem distância calculada não sai: taxa errada é prejuízo |
+| A distância é **copiada** para a entrega | Se o cliente mudar de endereço depois, a entrega antiga continua certa |
+| Não entregue: o pedido volta para CONFIRMADO e a taxa zera | Pode sair de novo, e a próxima saída calcula a taxa do novo entregador |
+| Só se edita pedido ABERTO, e só se exclui pedido ABERTO ou CANCELADO sem entregas | Pedido confirmado já mexeu no estoque, e pedido que saiu já tem entrega registrada |
+| **A entrega não tem editar nem excluir** | Cada saída é um fato que aconteceu (quem levou, quando, quanto cobrou). Se desse para apagar ou mudar, daria para "sumir" com uma taxa já cobrada. Por isso a entrega só **muda de situação** (entregue ou não entregue) e o histórico mostra todas as tentativas |
 
 ---
 
